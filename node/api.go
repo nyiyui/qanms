@@ -10,7 +10,6 @@ import (
 
 	"github.com/cenkalti/rpc2"
 	"github.com/nyiyui/qrystal/api"
-	"github.com/nyiyui/qrystal/central"
 	"github.com/nyiyui/qrystal/cs"
 	"github.com/nyiyui/qrystal/util"
 	"golang.org/x/exp/slices"
@@ -35,8 +34,6 @@ func (n *Node) setupClient(cl *rpc2.Client) {
 	cl.Handle("push", func(cl *rpc2.Client, q *api.PushQ, s *api.PushS) error {
 		// TODO: notify ERRNO= for errors?
 		var err error
-		n.ccLock.Lock()
-		defer n.ccLock.Unlock()
 		cc := q.CC
 
 		util.Notify(fmt.Sprintf("STATUS=Receiving new CC (%d CNs)...", len(cc.Networks)))
@@ -44,24 +41,22 @@ func (n *Node) setupClient(cl *rpc2.Client) {
 			util.S.Debugf("新たなCCを受信: net %s: %s", cnn, cn)
 		}
 
-		// NetworksAllowed
-		cc2 := map[string]*central.Network{}
+		// filter out NetworksAllowed
 		for cnn, cn := range cc.Networks {
-			if n.cs.netAllowed(cnn) {
-				cc2[cnn] = cn
-			} else {
+			if !n.cs.netAllowed(cnn) {
+				delete(cc.Netowrks, cnn)
 				util.S.Warnf("net not allowed; ignoring: %s", cnn)
 			}
 		}
-		cc.Networks = cc2
 
-		toRemove := cs.MissingFromFirst(cc.Networks, n.cc.Networks)
-		err = n.removeDevices(toRemove)
+		n.ccLock.Lock()
+		defer n.ccLock.Unlock()
+		err = n.removeDevices(cs.MissingFromFirst(cc.Networks, n.cc.Networks))
 		if err != nil {
 			return fmt.Errorf("rm devs: %w", err)
 		}
 		n.applyCC(&cc)
-		for cnn, cn := range cc.Networks {
+		for cnn, cn := range n.cc.Networks {
 			util.S.Debugf("after applyCC: net %s: %s", cnn, cn)
 		}
 		s.PubKeys = map[string]wgtypes.Key{}
