@@ -53,7 +53,7 @@ func (n *Node) loadSRVList(cl *rpc2.Client) (err error) {
 	}
 	util.S.Infof("srv: loaded srv list: %#v", sl)
 	srvs := make([]api.SRV, 0)
-	updated := false
+	anyUpdated := false
 	for cnn, srvs2 := range sl.Networks {
 		cn, ok := n.cc.Networks[cnn]
 		if !ok {
@@ -63,8 +63,8 @@ func (n *Node) loadSRVList(cl *rpc2.Client) (err error) {
 		me := cn.Peers[cn.Me]
 		var updated2 bool
 		util.S.Debugf("srv: original: %#v", me.SRVs)
-		me.SRVs, updated2 = central.UpdateSRVs(me.SRVs, srvs2)
-		updated = updated || updated2
+		_, updated2 = central.UpdateSRVs(me.SRVs, srvs2)
+		anyUpdated = anyUpdated || updated2
 		for _, srv2 := range srvs2 {
 			srvs = append(srvs, api.SRV{
 				NetworkName: cnn,
@@ -72,11 +72,21 @@ func (n *Node) loadSRVList(cl *rpc2.Client) (err error) {
 			})
 		}
 	}
-	if updated {
+	if anyUpdated {
 		util.S.Infof("srv: updating...")
 		err := n.srvUpdate(cl, srvs)
 		if err != nil {
 			return err
+		}
+
+		for cnn, srvs2 := range sl.Networks {
+			cn, ok := n.cc.Networks[cnn]
+			if !ok {
+				// already warned
+				continue
+			}
+			me := cn.Peers[cn.Me]
+			me.SRVs, _ = central.UpdateSRVs(me.SRVs, srvs2)
 		}
 		util.S.Infof("srv: updated.")
 	} else {
