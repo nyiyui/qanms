@@ -74,10 +74,6 @@ func (n *Node) applyCC(cc2 *central.Config) {
 			if peer.PubKey != peer2.PubKey {
 				peer.Desynced |= central.DKeys
 			}
-			peer.AllowedSRVs = peer2.AllowedSRVs
-			if !slices.Equal(peer.AllowedSRVs, peer2.AllowedSRVs) {
-				peer.Desynced |= central.DSRVs
-			}
 			peer.SRVs = peer2.SRVs
 			if !slices.Equal(peer.SRVs, peer2.SRVs) {
 				peer.Desynced |= central.DSRVs
