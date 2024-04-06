@@ -42,9 +42,9 @@ func (n *Node) setupClient(cl *rpc2.Client) {
 		}
 
 		// filter out NetworksAllowed
-		for cnn, cn := range cc.Networks {
+		for cnn := range cc.Networks {
 			if !n.cs.netAllowed(cnn) {
-				delete(cc.Netowrks, cnn)
+				delete(cc.Networks, cnn)
 				util.S.Warnf("net not allowed; ignoring: %s", cnn)
 			}
 		}
