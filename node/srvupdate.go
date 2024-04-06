@@ -62,6 +62,7 @@ func (n *Node) loadSRVList(cl *rpc2.Client) (err error) {
 		}
 		me := cn.Peers[cn.Me]
 		var updated2 bool
+		util.S.Debugf("srv: original: %#v", me.SRVs)
 		me.SRVs, updated2 = central.UpdateSRVs(me.SRVs, srvs2)
 		updated = updated || updated2
 		for _, srv2 := range srvs2 {

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"golang.org/x/exp/slices"
 )
 
 func TestGobEncoding(t *testing.T) {
@@ -86,4 +87,24 @@ func TestIPNetSubsetOf(t *testing.T) {
 			t.Logf("    want = %t ; got = %t", tc.subset, got)
 		}
 	}
+}
+
+func TestUpdateSRVs(t *testing.T) {
+	runTest := func(name string, target, update []SRV, result []SRV, updated bool) {
+		t.Run(name, func(t *testing.T) {
+			result2, updated2 := UpdateSRVs(target, update)
+			if updated != updated2 || !slices.Equal(result, result2) {
+				t.Logf("updated: %t", updated)
+				t.Logf("updated2: %t", updated2)
+				t.Logf("result: %#v", result)
+				t.Logf("result2: %#v", result2)
+				t.Fatal("mismatch")
+			}
+		})
+	}
+	runTest("same",
+		[]SRV{{Service: "_yukari-server", Protocol: "_tcp", Priority: 0xa, Weight: 0xa, Port: 0x703a}},
+		[]SRV{{Service: "_yukari-server", Protocol: "_tcp", Priority: 0xa, Weight: 0xa, Port: 0x703a}},
+		[]SRV{{Service: "_yukari-server", Protocol: "_tcp", Priority: 0xa, Weight: 0xa, Port: 0x703a}},
+		false)
 }
