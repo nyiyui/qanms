@@ -4,11 +4,15 @@ import (
 	"fmt"
 
 	"github.com/nyiyui/qrystal/hokuto"
+	"github.com/nyiyui/qrystal/util"
 )
 
 // updateHokutoCC updates hokuto's copy of CC.
 // NOTE: Node.ccLock must be locked!
 func (n *Node) updateHokutoCC() error {
+	for cnn, cn := range n.cc.Networks {
+		util.S.Debugf("updateHokutoCC pre: net %s: %s", cnn, cn)
+	}
 	var dummy bool
 	q := hokuto.UpdateCCQ{
 		Token: n.hokuto.token,
@@ -17,6 +21,9 @@ func (n *Node) updateHokutoCC() error {
 	err := n.hokuto.client.Call("Hokuto.UpdateCC", q, &dummy)
 	if err != nil {
 		return fmt.Errorf("call: %w", err)
+	}
+	for cnn, cn := range n.cc.Networks {
+		util.S.Debugf("updateHokutoCC post: net %s: %s", cnn, cn)
 	}
 	return nil
 }
