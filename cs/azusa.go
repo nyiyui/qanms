@@ -84,9 +84,13 @@ func (c *CentralSource) azusa(cl *rpc2.Client, q *api.AzusaQ, s *api.AzusaS) err
 				okSRVs = append(okSRVs, srv)
 			}
 			if len(okSRVs) < len(prevPeer.SRVs) {
-				util.S.Infof("azusa from token %s to push net %s peer %s: previous SRV records not allowed by new AllowedSRVs rule; removing disallowed SRV records (%d previous, %d now disallowed, %d still allowed)", ti.Name, cnn, peer.Name, len(prevPeer.SRVs), len(prevPeer.SRVs)-len(okSRVs), len(okSRVs))
+				util.S.Warnf("azusa from token %s to push net %s peer %s: previous SRV records not allowed by new AllowedSRVs rule; removing disallowed SRV records (%d previous, %d now disallowed, %d still allowed)", ti.Name, cnn, peer.Name, len(prevPeer.SRVs), len(prevPeer.SRVs)-len(okSRVs), len(okSRVs))
+			} else {
+				util.S.Infof("azusa from token %s to push net %s peer %s: all SRV records kept", ti.Name, cnn, peer.Name)
 			}
 			cn.Peers[peer.Name].SRVs = okSRVs
+		} else {
+			util.S.Debugf("azusa from token %s to push net %s peer %s: no SRV records", ti.Name, cnn, peer.Name)
 		}
 		changed[cnn] = []string{peer.Name}
 	}
