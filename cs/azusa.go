@@ -66,12 +66,27 @@ func (c *CentralSource) azusa(cl *rpc2.Client, q *api.AzusaQ, s *api.AzusaS) err
 				central.IPNet(ipNet),
 			}
 		}
+		prevPeer := cn.Peers[peer.Name]
 		cn.Peers[peer.Name] = &central.Peer{
-			Host:        peer.Host,
-			AllowedIPs:  peer.AllowedIPs,
-			CanSee:      peer.CanSee,
-			CanForward:  peer.CanForward,
-			AllowedSRVs: peer.AllowedSRVs,
+			Host:             peer.Host,
+			AlternativeHosts: peer.AlternativeHosts,
+			AllowedIPs:       peer.AllowedIPs,
+			CanForward:       peer.CanForward,
+			CanSee:           peer.CanSee,
+			AllowedSRVs:      peer.AllowedSRVs,
+		}
+		if len(prevPeer.SRVs) > 0 {
+			okSRVs := make([]central.SRV, 0)
+			for _, srv := range prevPeer.SRVs {
+				if !central.AllowedByAny(srv, peer.AllowedSRVs) {
+					continue
+				}
+				okSRVs = append(okSRVs, srv)
+			}
+			if len(okSRVs) < len(prevPeer.SRVs) {
+				util.S.Infof("azusa from token %s to push net %s peer %s: previous SRV records not allowed by new AllowedSRVs rule; removing disallowed SRV records (%d previous, %d now disallowed, %d still allowed)", ti.Name, cnn, peer.Name, len(prevPeer.SRVs), len(prevPeer.SRVs)-len(okSRVs), len(okSRVs))
+			}
+			cn.Peers[peer.Name].SRVs = okSRVs
 		}
 		changed[cnn] = []string{peer.Name}
 	}
