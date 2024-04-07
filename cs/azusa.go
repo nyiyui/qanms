@@ -75,7 +75,7 @@ func (c *CentralSource) azusa(cl *rpc2.Client, q *api.AzusaQ, s *api.AzusaS) err
 			CanSee:           peer.CanSee,
 			AllowedSRVs:      peer.AllowedSRVs,
 		}
-		if len(prevPeer.SRVs) > 0 {
+		if prevPeer != nil && len(prevPeer.SRVs) > 0 {
 			okSRVs := make([]central.SRV, 0)
 			for _, srv := range prevPeer.SRVs {
 				if !central.AllowedByAny(srv, peer.AllowedSRVs) {
