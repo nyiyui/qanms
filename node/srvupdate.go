@@ -76,6 +76,7 @@ func (n *Node) loadSRVList(cl *rpc2.Client) (err error) {
 		util.S.Infof("srv: updating...")
 		err := n.srvUpdate(cl, srvs)
 		if err != nil {
+			util.S.Infof("srv: update failed: %s", err)
 			return err
 		}
 
