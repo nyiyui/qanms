@@ -1,3 +1,6 @@
+// Package goal provides a goal-based library for configuring WireGuard devices and routing.
+// Note: only IPv4 supported yet.
+
 package goal
 
 import (
@@ -70,8 +73,10 @@ type Interface struct {
 type InterfaceDiff struct {
 	PrivateKeyChanged bool
 	ListenPortChanged bool
-	PeersChanged      []Change[InterfacePeer]
 	PeersNoChange     bool
+	PeersAdded        []InterfacePeer
+	PeersRemoved      []InterfacePeer
+	PeersChanged      []InterfacePeer
 }
 
 func (diff InterfaceDiff) NoChange() bool {
@@ -82,6 +87,9 @@ func (diff InterfaceDiff) NoChange() bool {
 // a and b's Peers' order may change.
 // Note that Peers are identified by its Peer.ID.
 func DiffInterface(a, b *Interface) InterfaceDiff {
+	if a.Name != b.Name {
+		panic("cannot diff between names")
+	}
 	var diff InterfaceDiff
 	if !bytes.Equal(a.PrivateKey[:], b.PrivateKey[:]) {
 		diff.PrivateKeyChanged = true
@@ -89,49 +97,40 @@ func DiffInterface(a, b *Interface) InterfaceDiff {
 	if a.ListenPort != b.ListenPort {
 		diff.ListenPortChanged = true
 	}
-	sort.Slice(a.Peers, func(i, j int) bool { return bytes.Compare(a.Peers[i].ID[:], a.Peers[j].ID[:]) < 0 })
-	sort.Slice(b.Peers, func(i, j int) bool { return bytes.Compare(b.Peers[i].ID[:], b.Peers[j].ID[:]) < 0 })
-
-	diff.PeersNoChange = true
-	var i, j int
-	for i < len(a.Peers) && j < len(b.Peers) {
-		cmp := bytes.Compare(a.Peers[i].ID[:], b.Peers[j].ID[:])
-		switch {
-		case cmp < 0:
-			diff.PeersNoChange = false
-			diff.PeersChanged = append(diff.PeersChanged, Change[InterfacePeer]{Op: ChangeOpRemove, Value: a.Peers[i]})
-			i++
-		case cmp > 0:
-			diff.PeersNoChange = false
-			diff.PeersChanged = append(diff.PeersChanged, Change[InterfacePeer]{Op: ChangeOpAdd, Value: b.Peers[j]})
-			j++
-		default:
-			peerDiff := DiffInterfacePeer(&a.Peers[i], &b.Peers[j])
-			if peerDiff.NoChange() {
-				diff.PeersChanged = append(diff.PeersChanged, Change[InterfacePeer]{Op: ChangeOpNoChange, Value: a.Peers[i]})
-			} else {
-				diff.PeersNoChange = false
-			}
-			i++
-			j++
+	aNames := map[string]int{}
+	for i, peer := range a.Peers {
+		aNames[peer.Name] = i
+	}
+	bNames := map[string]int{}
+	for i, peer := range b.Peers {
+		bNames[peer.Name] = i
+	}
+	for _, peer := range a.Peers {
+		if _, ok := bNames[peer.Name]; !ok {
+			diff.PeersRemoved = append(diff.PeersRemoved, peer)
 		}
 	}
-
-	for ; i < len(a.Peers); i++ {
-		diff.PeersNoChange = false
-		diff.PeersChanged = append(diff.PeersChanged, Change[InterfacePeer]{Op: ChangeOpRemove, Value: a.Peers[i]})
+	for _, peer := range b.Peers {
+		if _, ok := aNames[peer.Name]; !ok {
+			diff.PeersAdded = append(diff.PeersAdded, peer)
+		}
 	}
-
-	for ; j < len(b.Peers); j++ {
-		diff.PeersNoChange = false
-		diff.PeersChanged = append(diff.PeersChanged, Change[InterfacePeer]{Op: ChangeOpAdd, Value: b.Peers[j]})
+	for i, peer := range a.Peers {
+		_, ok1 := aNames[peer.Name]
+		j, ok2 := bNames[peer.Name]
+		if !ok1 || !ok2 {
+			continue
+		}
+		d := DiffInterfacePeer(&a.Peers[i], &b.Peers[j])
+		if !d.NoChange() {
+			diff.PeersChanged = append(diff.PeersChanged, b.Peers[j])
+		}
 	}
-
 	return diff
 }
 
 type InterfacePeer struct {
-	ID [32]byte
+	Name string
 
 	PublicKey wgtypes.Key
 
