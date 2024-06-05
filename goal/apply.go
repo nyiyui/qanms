@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 
 	"github.com/vishvananda/netlink"
 	"golang.zx2c4.com/wireguard/wgctrl"
@@ -11,11 +12,42 @@ import (
 )
 
 func ApplyMachineDiff(a, b Machine, md MachineDiff, client *wgctrl.Client, handle *netlink.Handle) (err error) {
+	for _, iface := range md.InterfacesRemoved {
+		err = DeleteInterface(iface, client, handle)
+		if err != nil {
+			return
+		}
+	}
+	for _, iface := range md.InterfacesAdded {
+		err = CreateInterface(iface, client, handle)
+		if err != nil {
+			return
+		}
+	}
+	for _, ifaceName := range md.InterfacesChanged {
+		aIndex := slices.IndexFunc(a.Interfaces, func(iface Interface) bool { return iface.Name == ifaceName })
+		bIndex := slices.IndexFunc(b.Interfaces, func(iface Interface) bool { return iface.Name == ifaceName })
+		id := DiffInterface(&a.Interfaces[aIndex], &b.Interfaces[bIndex])
+		err = ApplyInterfaceDiff(a.Interfaces[aIndex], b.Interfaces[bIndex], id, client, handle)
+		if err != nil {
+			return
+		}
+	}
 	panic("not implemented yet")
 }
 
 func DeleteInterface(iface Interface, client *wgctrl.Client, handle *netlink.Handle) (err error) {
-	panic("not implemented yet")
+	// Steps:
+	// - delete interface
+
+	// === delete interface ===
+	var link netlink.Link
+	link, err = handle.LinkByName(iface.Name)
+	if err != nil {
+		return
+	}
+	err = handle.LinkDel(link)
+	return
 }
 
 func CreateInterface(iface Interface, client *wgctrl.Client, handle *netlink.Handle) (err error) {

@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"net"
 	"sort"
-	"strings"
 	"time"
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -18,42 +17,43 @@ type Machine struct {
 }
 
 type MachineDiff struct {
-	InterfacesChanged []Change[Interface]
+	InterfacesAdded   []Interface
+	InterfacesRemoved []Interface
+	InterfacesChanged []string
 	InterfaceNoChange bool
 }
 
 func DiffMachine(a, b *Machine) MachineDiff {
 	var diff MachineDiff
 
-	sort.Slice(a.Interfaces, func(i, j int) bool { return a.Interfaces[i].Name < a.Interfaces[j].Name })
-	sort.Slice(b.Interfaces, func(i, j int) bool { return b.Interfaces[i].Name < b.Interfaces[j].Name })
-
-	var i, j int
-	for i < len(a.Interfaces) && j < len(b.Interfaces) {
-		cmp := strings.Compare(a.Interfaces[i].Name, b.Interfaces[j].Name)
-		switch {
-		case cmp < 0:
-			diff.InterfacesChanged = append(diff.InterfacesChanged, Change[Interface]{Op: ChangeOpRemove, Value: a.Interfaces[i]})
-			i++
-		case cmp > 0:
-			diff.InterfacesChanged = append(diff.InterfacesChanged, Change[Interface]{Op: ChangeOpAdd, Value: b.Interfaces[j]})
-			j++
-		default:
-			interfaceDiff := DiffInterface(&a.Interfaces[i], &b.Interfaces[j])
-			if interfaceDiff.NoChange() {
-				diff.InterfacesChanged = append(diff.InterfacesChanged, Change[Interface]{Op: ChangeOpNoChange, Value: a.Interfaces[i]})
-			}
-			i++
-			j++
+	aNames := map[string]int{}
+	for i, peer := range a.Interfaces {
+		aNames[peer.Name] = i
+	}
+	bNames := map[string]int{}
+	for i, peer := range b.Interfaces {
+		bNames[peer.Name] = i
+	}
+	for _, peer := range a.Interfaces {
+		if _, ok := bNames[peer.Name]; !ok {
+			diff.InterfacesRemoved = append(diff.InterfacesRemoved, peer)
 		}
 	}
-
-	for ; i < len(a.Interfaces); i++ {
-		diff.InterfacesChanged = append(diff.InterfacesChanged, Change[Interface]{Op: ChangeOpRemove, Value: a.Interfaces[i]})
+	for _, peer := range b.Interfaces {
+		if _, ok := aNames[peer.Name]; !ok {
+			diff.InterfacesAdded = append(diff.InterfacesAdded, peer)
+		}
 	}
-
-	for ; j < len(b.Interfaces); j++ {
-		diff.InterfacesChanged = append(diff.InterfacesChanged, Change[Interface]{Op: ChangeOpAdd, Value: b.Interfaces[j]})
+	for i, peer := range a.Interfaces {
+		_, ok1 := aNames[peer.Name]
+		j, ok2 := bNames[peer.Name]
+		if !ok1 || !ok2 {
+			continue
+		}
+		d := DiffInterface(&a.Interfaces[i], &b.Interfaces[j])
+		if !d.NoChange() {
+			diff.InterfacesChanged = append(diff.InterfacesChanged, b.Interfaces[j].Name)
+		}
 	}
 
 	return diff
@@ -76,7 +76,7 @@ type InterfaceDiff struct {
 	PeersNoChange     bool
 	PeersAdded        []InterfacePeer
 	PeersRemoved      []InterfacePeer
-	PeersChanged      []InterfacePeer
+	PeersChanged      []string
 }
 
 func (diff InterfaceDiff) NoChange() bool {
@@ -123,7 +123,7 @@ func DiffInterface(a, b *Interface) InterfaceDiff {
 		}
 		d := DiffInterfacePeer(&a.Peers[i], &b.Peers[j])
 		if !d.NoChange() {
-			diff.PeersChanged = append(diff.PeersChanged, b.Peers[j])
+			diff.PeersChanged = append(diff.PeersChanged, b.Peers[j].Name)
 		}
 	}
 	return diff
