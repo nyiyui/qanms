@@ -21,4 +21,5 @@ func SetupLog() {
 		L, _ = zap.NewProduction()
 	}
 	S = L.Sugar()
+	zap.ReplaceGlobals(L)
 }

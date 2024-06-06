@@ -5,11 +5,8 @@ package goal
 
 import (
 	"bytes"
-	"net"
 	"sort"
 	"time"
-
-	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
 type Machine struct {
@@ -62,10 +59,12 @@ func DiffMachine(a, b *Machine) MachineDiff {
 type Interface struct {
 	Name string
 
-	PrivateKey wgtypes.Key
+	PrivateKey Key
 
 	// ListenPort is the device's listening port. set to -1 for nothing.
 	ListenPort int
+
+	Address IPNet
 
 	Peers []InterfacePeer
 }
@@ -74,6 +73,8 @@ type InterfaceDiff struct {
 	PrivateKeyChanged bool
 	ListenPortChanged bool
 	PeersNoChange     bool
+	AddressesChanged  []Change[IPNet]
+	AddressesNoChange bool
 	PeersAdded        []InterfacePeer
 	PeersRemoved      []InterfacePeer
 	PeersChanged      []string
@@ -132,9 +133,9 @@ func DiffInterface(a, b *Interface) InterfaceDiff {
 type InterfacePeer struct {
 	Name string
 
-	PublicKey wgtypes.Key
+	PublicKey Key
 
-	PresharedKey wgtypes.Key
+	PresharedKey *Key
 
 	// Endpoint as a string that will be looked up.
 	// Set to an empty string for nothing.
@@ -144,7 +145,7 @@ type InterfacePeer struct {
 	// Set to 0 to disable persistent keepalive.
 	PersistentKeepalive time.Duration
 
-	AllowedIPs []net.IPNet
+	AllowedIPs []IPNet
 }
 
 type InterfacePeerDiff struct {
@@ -152,7 +153,7 @@ type InterfacePeerDiff struct {
 	PresharedKeyChanged        bool
 	EndpointChanged            bool
 	PersistentKeepaliveChanged bool
-	AllowedIPsChanged          []Change[net.IPNet]
+	AllowedIPsChanged          []Change[IPNet]
 	AllowedIPsNoChange         bool
 }
 
@@ -184,7 +185,7 @@ func DiffInterfacePeer(a, b *InterfacePeer) InterfacePeerDiff {
 	if !bytes.Equal(a.PublicKey[:], b.PublicKey[:]) {
 		diff.PublicKeyChanged = true
 	}
-	if !bytes.Equal(a.PresharedKey[:], b.PresharedKey[:]) {
+	if (a.PresharedKey == nil) != (b.PresharedKey == nil) || ((a.PresharedKey != nil && b.PresharedKey != nil) && !bytes.Equal(a.PresharedKey[:], b.PresharedKey[:])) {
 		diff.PresharedKeyChanged = true
 	}
 	if a.Endpoint != b.Endpoint {
@@ -207,19 +208,19 @@ func DiffInterfacePeer(a, b *InterfacePeer) InterfacePeerDiff {
 		switch {
 		case cmp < 0:
 			diff.AllowedIPsNoChange = false
-			diff.AllowedIPsChanged = append(diff.AllowedIPsChanged, Change[net.IPNet]{Op: ChangeOpRemove, Value: a.AllowedIPs[i]})
+			diff.AllowedIPsChanged = append(diff.AllowedIPsChanged, Change[IPNet]{Op: ChangeOpRemove, Value: a.AllowedIPs[i]})
 			i++
 		case cmp > 0:
 			diff.AllowedIPsNoChange = false
-			diff.AllowedIPsChanged = append(diff.AllowedIPsChanged, Change[net.IPNet]{Op: ChangeOpAdd, Value: b.AllowedIPs[j]})
+			diff.AllowedIPsChanged = append(diff.AllowedIPsChanged, Change[IPNet]{Op: ChangeOpAdd, Value: b.AllowedIPs[j]})
 			j++
 		default:
 			if !bytes.Equal(a.AllowedIPs[i].Mask, b.AllowedIPs[j].Mask) {
 				diff.AllowedIPsNoChange = false
-				diff.AllowedIPsChanged = append(diff.AllowedIPsChanged, Change[net.IPNet]{Op: ChangeOpRemove, Value: a.AllowedIPs[i]})
-				diff.AllowedIPsChanged = append(diff.AllowedIPsChanged, Change[net.IPNet]{Op: ChangeOpAdd, Value: b.AllowedIPs[j]})
+				diff.AllowedIPsChanged = append(diff.AllowedIPsChanged, Change[IPNet]{Op: ChangeOpRemove, Value: a.AllowedIPs[i]})
+				diff.AllowedIPsChanged = append(diff.AllowedIPsChanged, Change[IPNet]{Op: ChangeOpAdd, Value: b.AllowedIPs[j]})
 			} else {
-				diff.AllowedIPsChanged = append(diff.AllowedIPsChanged, Change[net.IPNet]{Op: ChangeOpNoChange, Value: a.AllowedIPs[i]})
+				diff.AllowedIPsChanged = append(diff.AllowedIPsChanged, Change[IPNet]{Op: ChangeOpNoChange, Value: a.AllowedIPs[i]})
 			}
 			i++
 			j++
@@ -228,12 +229,12 @@ func DiffInterfacePeer(a, b *InterfacePeer) InterfacePeerDiff {
 
 	for ; i < len(a.AllowedIPs); i++ {
 		diff.AllowedIPsNoChange = false
-		diff.AllowedIPsChanged = append(diff.AllowedIPsChanged, Change[net.IPNet]{Op: ChangeOpRemove, Value: a.AllowedIPs[i]})
+		diff.AllowedIPsChanged = append(diff.AllowedIPsChanged, Change[IPNet]{Op: ChangeOpRemove, Value: a.AllowedIPs[i]})
 	}
 
 	for ; j < len(b.AllowedIPs); j++ {
 		diff.AllowedIPsNoChange = false
-		diff.AllowedIPsChanged = append(diff.AllowedIPsChanged, Change[net.IPNet]{Op: ChangeOpAdd, Value: b.AllowedIPs[j]})
+		diff.AllowedIPsChanged = append(diff.AllowedIPsChanged, Change[IPNet]{Op: ChangeOpAdd, Value: b.AllowedIPs[j]})
 	}
 	return diff
 }

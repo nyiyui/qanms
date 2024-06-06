@@ -8,34 +8,33 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
-func mustParseCIDR(addr string) net.IPNet {
+func mustParseCIDR(addr string) IPNet {
 	_, ret, err := net.ParseCIDR(addr)
 	if err != nil {
 		panic(err)
 	}
-	return *ret
+	return IPNet(*ret)
 }
 
 func TestDiffInterfacePeer(t *testing.T) {
 	a := InterfacePeer{
-		PublicKey:           wgtypes.Key{1},
-		PresharedKey:        wgtypes.Key{1},
+		PublicKey:           Key{1},
+		PresharedKey:        nil,
 		Endpoint:            "localhost",
 		PersistentKeepalive: 0,
-		AllowedIPs: []net.IPNet{
+		AllowedIPs: []IPNet{
 			mustParseCIDR("10.10.0.0/24"),
 			mustParseCIDR("10.10.1.0/25"),
 		},
 	}
 	b := InterfacePeer{
-		PublicKey:           wgtypes.Key{0},
-		PresharedKey:        wgtypes.Key{1},
+		PublicKey:           Key{0},
+		PresharedKey:        nil,
 		Endpoint:            "127.0.0.1",
 		PersistentKeepalive: 1 * time.Second,
-		AllowedIPs: []net.IPNet{
+		AllowedIPs: []IPNet{
 			mustParseCIDR("10.10.1.0/25"),
 			mustParseCIDR("10.10.2.0/32"),
 		},
@@ -45,7 +44,7 @@ func TestDiffInterfacePeer(t *testing.T) {
 		PublicKeyChanged:           true,
 		EndpointChanged:            true,
 		PersistentKeepaliveChanged: true,
-		AllowedIPsChanged: []Change[net.IPNet]{
+		AllowedIPsChanged: []Change[IPNet]{
 			{ChangeOpRemove, mustParseCIDR("10.10.0.0/24")},
 			{ChangeOpNoChange, mustParseCIDR("10.10.1.0/25")},
 			{ChangeOpAdd, mustParseCIDR("10.10.2.0/32")},

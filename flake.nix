@@ -64,7 +64,7 @@
 
             #vendorHash = pkgs.lib.fakeSha256;
             vendorHash =
-              "sha256-T/HPyY+A1o6oMw5NEMg8ui5IHitOOyGF6DAIjfLmNRI=";
+              "sha256-v6aXvMA+JBJT9tjQqsDuRK8SxRBu83KchsQeXu4c3Co=";
           };
         in {
           runner = pkgs.buildGoModule (common // {

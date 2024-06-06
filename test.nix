@@ -777,4 +777,81 @@ in {
       server.wait_for_unit("udp-receive.service")
     '';
   });
+  goal = lib.runTest (let
+    peerPrivateKey = "kCtV08G5gyM/cGHToObIAtwRq/bqI2Jd3akIsAMXRXM=";
+    peerPublicKey = "72zpXYpjSWnvyhwZTuRNwtghjxjzhWEVzUNRA82hoUA=";
+    defaultPrivateKey = "eDq8aX08rF5cLG+NNi14Ae8TIudsMHiWCjsbBTDI1Ec=";
+    defaultPublicKey = "+atCYz0YmiwBx4AZy5kDGr5WHqHs3RMbIuPfj593sRk=";
+    etc = self.outputs.packages.${system}.etc;
+    machine1 = pkgs.writeText "machine1.json" (builtins.toJSON {
+    });
+    machine2 = pkgs.writeText "machine2.json" (builtins.toJSON {
+      Interfaces = [
+        {
+          Name = "wiring";
+          PrivateKey = defaultPrivateKey;
+          ListenPort = 51820;
+          Addresses = [ "10.10.0.0/32" ];
+          Peers = [
+            { Name = "peer"; PublicKey = peerPublicKey; Endpoint = "peer:51820"; AllowedIPs = [ "10.10.0.1/32" ]; PersistentKeepalive = 30; }
+          ];
+        }
+      ];
+    });
+    machine3 = pkgs.writeText "machine3.json" (builtins.toJSON {
+      Interfaces = [
+        {
+          Name = "wiring";
+          PrivateKey = "";
+          ListenPort = 51820;
+          Addresses = [ "10.10.0.0/32" ];
+          Peers = [
+            { Name = "peer"; PublicKey = ""; Endpoint = "peer:51820"; AllowedIPs = [ "10.10.0.2/32" ]; }
+          ];
+        }
+      ];
+    });
+  in {
+    name = "goal";
+    hostPkgs = pkgs;
+    nodes.default = { pkgs, ... }: {
+      imports = [ base ];
+      environment.systemPackages = [ self.outputs.packages.${system}.etc ];
+      systemd.services.goal1.script = ''
+        QRYSTAL_LOGGING_CONFIG=development ${etc}/bin/test-goal -a-path ${machine1} -b-path ${machine2}
+      '';
+      systemd.services.goal2.script = ''
+        QRYSTAL_LOGGING_CONFIG=development ${etc}/bin/test-goal -a-path ${machine2} -b-path ${machine3}
+      '';
+    };
+    nodes.peer = { pkgs, ... }: {
+      imports = [ base ];
+      #TODO: wireguard config
+      networking.wireguard.interfaces = {
+        wiring = {
+          ips = [ "10.10.0.1/32" ];
+          privateKey = peerPrivateKey;
+          peers = [{
+            publicKey = defaultPublicKey;
+            allowedIPs = [ "10.10.0.0/32" ];
+            endpoint = "default:51820";
+            persistentKeepalive = 30;
+          }];
+        };
+      };
+    };
+    testScript = { nodes, ... }: ''
+      peer.start()
+      default.start()
+
+      peer.wait_until_succeeds("wg show wiring")
+      default.wait_until_succeeds("ping peer")
+      default.systemctl("start goal1.service")
+      default.wait_until_succeeds("ping 10.10.0.0")
+      peer.wait_until_succeeds("ping 10.10.0.1")
+      peer.systemctl("start test-connection-continuity")
+      default.systemctl("start goal2.service")
+      peer.systemctl("status test-connection-continuity")
+    '';
+  });
 }
