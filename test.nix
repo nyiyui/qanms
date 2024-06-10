@@ -845,8 +845,11 @@ in {
       default.start()
 
       peer.wait_until_succeeds("wg show wiring")
-      default.wait_until_succeeds("ping peer")
-      default.systemctl("start goal1.service")
+      default.systemctl("--wait start goal1.service")
+      # TODO: verify goal1.service is actually done after this systemctl call
+      print(default.execute("systemctl status goal1.service")[1])
+      print(default.succeed("ip link show"))
+      print(default.succeed("wg show wiring"))
       default.wait_until_succeeds("ping 10.10.0.0")
       peer.wait_until_succeeds("ping 10.10.0.1")
       peer.systemctl("start test-connection-continuity")

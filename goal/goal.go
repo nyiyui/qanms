@@ -64,7 +64,7 @@ type Interface struct {
 	// ListenPort is the device's listening port. set to -1 for nothing.
 	ListenPort int
 
-	Address IPNet
+	Addresses []IPNet
 
 	Peers []InterfacePeer
 }
@@ -72,9 +72,10 @@ type Interface struct {
 type InterfaceDiff struct {
 	PrivateKeyChanged bool
 	ListenPortChanged bool
-	PeersNoChange     bool
-	AddressesChanged  []Change[IPNet]
+	AddressesAdded    []IPNet
+	AddressesRemoved  []IPNet
 	AddressesNoChange bool
+	PeersNoChange     bool
 	PeersAdded        []InterfacePeer
 	PeersRemoved      []InterfacePeer
 	PeersChanged      []string
@@ -126,6 +127,45 @@ func DiffInterface(a, b *Interface) InterfaceDiff {
 		if !d.NoChange() {
 			diff.PeersChanged = append(diff.PeersChanged, b.Peers[j].Name)
 		}
+	}
+	sort.Slice(a.Addresses, func(i, j int) bool {
+		return bytes.Compare(a.Addresses[i].IP[:], a.Addresses[j].IP[:]) < 0
+	})
+	sort.Slice(b.Addresses, func(i, j int) bool {
+		return bytes.Compare(b.Addresses[i].IP[:], b.Addresses[j].IP[:]) < 0
+	})
+	diff.AddressesNoChange = true
+	var i, j int
+	for i < len(a.Addresses) && j < len(b.Addresses) {
+		cmp := bytes.Compare(a.Addresses[i].IP, b.Addresses[j].IP)
+		switch {
+		case cmp < 0:
+			diff.AddressesNoChange = false
+			diff.AddressesRemoved = append(diff.AddressesRemoved, a.Addresses[i])
+			i++
+		case cmp > 0:
+			diff.AddressesNoChange = false
+			diff.AddressesAdded = append(diff.AddressesAdded, a.Addresses[i])
+			j++
+		default:
+			if !bytes.Equal(a.Addresses[i].Mask, b.Addresses[j].Mask) {
+				diff.AddressesNoChange = false
+				diff.AddressesRemoved = append(diff.AddressesRemoved, a.Addresses[i])
+				diff.AddressesAdded = append(diff.AddressesAdded, b.Addresses[i])
+			}
+			i++
+			j++
+		}
+	}
+
+	for ; i < len(a.Addresses); i++ {
+		diff.AddressesNoChange = false
+		diff.AddressesRemoved = append(diff.AddressesRemoved, a.Addresses[i])
+	}
+
+	for ; j < len(b.Addresses); j++ {
+		diff.AddressesNoChange = false
+		diff.AddressesAdded = append(diff.AddressesAdded, b.Addresses[j])
 	}
 	return diff
 }

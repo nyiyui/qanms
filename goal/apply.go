@@ -74,16 +74,19 @@ func CreateInterface(iface Interface, client *wgctrl.Client, handle *netlink.Han
 		LinkType: "wireguard",
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("adding link %s: %w", iface.Name, err)
 	}
 	// CLEANUP: clean up created link
 	defer func() {
-		err = handle.LinkDel(&netlink.GenericLink{
+		err2 := handle.LinkDel(&netlink.GenericLink{
 			LinkAttrs: netlink.LinkAttrs{
 				Name: iface.Name,
 			},
 			LinkType: "wireguard",
 		})
+		if err2 != nil {
+			zap.S().Infof("cleanup: undoing: adding link %s failed: %s", iface.Name, err2)
+		}
 	}()
 
 	a := Interface{
@@ -95,7 +98,7 @@ func CreateInterface(iface Interface, client *wgctrl.Client, handle *netlink.Han
 	return ApplyInterfaceDiff(a, iface, id, client, handle)
 }
 
-func ApplyInterfaceDiff(a, b Interface, id InterfaceDiff, client *wgctrl.Client, handle *netlink.Handle) (err error) {
+func ApplyInterfaceDiff(a, b Interface, id InterfaceDiff, client *wgctrl.Client, handle *netlink.Handle) error {
 	// Steps:
 	// - configure wg interface
 	// - remove addresses from wg interface
@@ -110,6 +113,7 @@ func ApplyInterfaceDiff(a, b Interface, id InterfaceDiff, client *wgctrl.Client,
 		panic("cannot apply diffs between names")
 	}
 
+	var err error
 	var link netlink.Link
 	link, err = handle.LinkByName(b.Name)
 	if err != nil {
@@ -127,7 +131,7 @@ func ApplyInterfaceDiff(a, b Interface, id InterfaceDiff, client *wgctrl.Client,
 		var endpoint *net.UDPAddr
 		endpoint, err = net.ResolveUDPAddr("udp", peer.Endpoint)
 		if err != nil {
-			return err
+			return fmt.Errorf("resolving %s for peer %s: %w", peer.Endpoint, peer.Name, err)
 		}
 		peers[i] = wgtypes.PeerConfig{
 			PublicKey:    wgtypes.Key(peer.PublicKey),
@@ -150,68 +154,74 @@ func ApplyInterfaceDiff(a, b Interface, id InterfaceDiff, client *wgctrl.Client,
 	if err != nil {
 		return fmt.Errorf("configuring wg interface: %w", err)
 	}
+	zap.S().Debug("wg interface configured.")
 	// CLEANUP: wg device is deleted when `ip link del` happens, so no cleanup is necessary.
 
+	zap.S().Debug("remove addresses to wg interface.")
 	// === remove addresses to wg interface ===
-	for _, change := range id.AddressesChanged {
-		if change.Op != ChangeOpRemove {
-			continue
-		}
-		zap.S().Debugf("removing address %s from wg interface", change.Value)
-		addr := &netlink.Addr{
-			IPNet: (*net.IPNet)(&change.Value),
-		}
-		err := handle.AddrDel(link, addr)
+	removedIndex := -1
+	for i, addr := range id.AddressesRemoved {
+		zap.S().Debugf("removing address %s from wg interface", addr)
+		err = handle.AddrDel(link, &netlink.Addr{
+			IPNet: (*net.IPNet)(&addr),
+		})
 		if err != nil {
-			return err
+			return fmt.Errorf("removing address %s from wg interface", addr, err)
 		}
+		removedIndex = i
 	}
 	// CLEANUP: re-add each address added
 	defer func() {
-		for _, change := range id.AddressesChanged {
-			if change.Op != ChangeOpRemove {
-				continue
+		if removedIndex == -1 {
+			return
+		}
+		for i, addr := range id.AddressesRemoved {
+			if i > removedIndex {
+				break
 			}
-			addr := &netlink.Addr{
-				IPNet: (*net.IPNet)(&change.Value),
-			}
-			err = handle.AddrAdd(link, addr)
-			if err != nil {
-				return
+			zap.S().Debugf("cleanup: undoing: removing address %s from wg interface", addr)
+			err2 := handle.AddrAdd(link, &netlink.Addr{
+				IPNet: (*net.IPNet)(&addr),
+			})
+			if err2 != nil {
+				zap.S().Debugf("cleanup: undoing: removing address %s from wg interface failed: %s", addr, err2)
 			}
 		}
 	}()
 
+	zap.S().Debug("add addresses to wg interface.")
 	// === add addresses to wg interface ===
-	for _, change := range id.AddressesChanged {
-		if change.Op != ChangeOpAdd {
-			continue
-		}
-		zap.S().Debugf("adding address %s from wg interface", change.Value)
-		addr := &netlink.Addr{
-			IPNet: (*net.IPNet)(&change.Value),
-		}
-		err := handle.AddrAdd(link, addr)
+	addedIndex := -1
+	for i, addr := range id.AddressesAdded {
+		zap.S().Debugf("adding address %s from wg interface", addr)
+		err = handle.AddrAdd(link, &netlink.Addr{
+			IPNet: (*net.IPNet)(&addr),
+		})
 		if err != nil {
-			return err
+			return fmt.Errorf("adding address %s from wg interface", addr, err)
 		}
+		addedIndex = i
 	}
 	// CLEANUP: remove each address added
 	defer func() {
-		for _, change := range id.AddressesChanged {
-			if change.Op != ChangeOpAdd {
-				continue
+		if addedIndex == -1 {
+			return
+		}
+		for i, addr := range id.AddressesAdded {
+			if i > addedIndex {
+				break
 			}
-			addr := &netlink.Addr{
-				IPNet: (*net.IPNet)(&change.Value),
-			}
-			err = handle.AddrDel(link, addr)
-			if err != nil {
-				return
+			zap.S().Debugf("cleanup: undoing: adding address %s from wg interface", addr)
+			err2 := handle.AddrDel(link, &netlink.Addr{
+				IPNet: (*net.IPNet)(&addr),
+			})
+			if err2 != nil {
+				zap.S().Debugf("cleanup: undoing: adding address %s from wg interface failed: %s", addr, err2)
 			}
 		}
 	}()
 
+	zap.S().Debug("remove routes to wg interface.")
 	// === remove routes to wg interface ===
 	for _, peer := range id.PeersRemoved {
 		for _, allowedIP := range peer.AllowedIPs {
@@ -222,7 +232,7 @@ func ApplyInterfaceDiff(a, b Interface, id InterfaceDiff, client *wgctrl.Client,
 				// TODO
 			})
 			if err != nil {
-				return
+				return fmt.Errorf("removing route with dst %s from wg link failed: %w", allowedIP, err)
 			}
 		}
 	}
@@ -230,46 +240,48 @@ func ApplyInterfaceDiff(a, b Interface, id InterfaceDiff, client *wgctrl.Client,
 	defer func() {
 		for _, peer := range id.PeersRemoved {
 			for _, allowedIP := range peer.AllowedIPs {
-				err = handle.RouteAdd(&netlink.Route{
+				err2 := handle.RouteAdd(&netlink.Route{
 					LinkIndex: link.Attrs().Index,
 					Dst:       (*net.IPNet)(&allowedIP),
 					// TODO
 				})
-				if err != nil {
-					return
+				if err2 != nil {
+					zap.S().Infof("cleanup: undoing: removing route with dst %s from wg link failed: %s", allowedIP, err2)
 				}
 			}
 		}
 	}()
 
+	zap.S().Debug("add routes to wg interface.")
 	// === add routes to wg interface ===
-	for _, peer := range id.PeersRemoved {
+	for _, peer := range id.PeersAdded {
 		for _, allowedIP := range peer.AllowedIPs {
 			zap.S().Debugf("adding route with dst %s from wg link", allowedIP)
-			err = handle.RouteDel(&netlink.Route{
+			err = handle.RouteAdd(&netlink.Route{
 				LinkIndex: link.Attrs().Index,
 				Dst:       (*net.IPNet)(&allowedIP),
 				// TODO
 			})
 			if err != nil {
-				return
+				return fmt.Errorf("adding route with dst %s from wg link failed: %w", allowedIP, err)
 			}
 		}
 	}
 	// CLEANUP: remove each route added
 	defer func() {
-		for _, peer := range id.PeersRemoved {
+		for _, peer := range id.PeersAdded {
 			for _, allowedIP := range peer.AllowedIPs {
-				err = handle.RouteAdd(&netlink.Route{
+				err2 := handle.RouteDel(&netlink.Route{
 					LinkIndex: link.Attrs().Index,
 					Dst:       (*net.IPNet)(&allowedIP),
 					// TODO
 				})
-				if err != nil {
-					return
+				if err2 != nil {
+					zap.S().Infof("cleanup: undoing: adding route with dst %s from wg link failed: %s", allowedIP, err2)
 				}
 			}
 		}
 	}()
-	return
+	zap.S().Debug("applied interface diff.")
+	return nil
 }
