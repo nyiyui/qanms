@@ -802,11 +802,11 @@ in {
       Interfaces = [
         {
           Name = "wiring";
-          PrivateKey = "";
+          PrivateKey = defaultPrivateKey;
           ListenPort = 51820;
           Addresses = [ "10.10.0.0/32" ];
           Peers = [
-            { Name = "peer"; PublicKey = ""; Endpoint = "peer:51820"; AllowedIPs = [ "10.10.0.2/32" ]; }
+            { Name = "peer"; PublicKey = peerPublicKey; Endpoint = "peer:51820"; AllowedIPs = [ "10.10.0.8/32" ]; }
           ];
         }
       ];
@@ -831,6 +831,7 @@ in {
         wiring = {
           ips = [ "10.10.0.1/32" ];
           privateKey = peerPrivateKey;
+          listenPort = 51820;
           peers = [{
             publicKey = defaultPublicKey;
             allowedIPs = [ "10.10.0.0/32" ];
@@ -848,12 +849,30 @@ in {
       default.systemctl("--wait start goal1.service")
       # TODO: verify goal1.service is actually done after this systemctl call
       print(default.execute("systemctl status goal1.service")[1])
+      print(default.execute("systemctl show goal1.service --property=Result")[1])
+      assert "Result=success" in default.execute("systemctl show goal1.service --property=Result")[1]
       print(default.succeed("ip link show"))
-      print(default.succeed("wg show wiring"))
-      default.wait_until_succeeds("ping 10.10.0.0")
-      peer.wait_until_succeeds("ping 10.10.0.1")
+      print("default addr", default.succeed("ip addr"))
+      print("peer addr", peer.succeed("ip addr"))
+      print("peer: ", peer.succeed("wg show wiring"))
+      print("default: ", default.succeed("wg show wiring"))
+      print("default: ", default.succeed("ping -c 2 10.10.0.0"))
+      print("default: ", default.succeed("wg show wiring"))
+      print("default: ", default.succeed("ping -c 2 10.10.0.1"))
+      print("default: ", default.succeed("wg show wiring"))
+      peer.succeed("ping -c 2 10.10.0.0")
+      peer.succeed("ping -c 2 10.10.0.1")
       peer.systemctl("start test-connection-continuity")
-      default.systemctl("start goal2.service")
+      default.systemctl("--wait start goal2.service")
+      print(default.execute("systemctl status goal2.service")[1])
+      assert "Result=success" in default.execute("systemctl show goal2.service --property=Result")[1]
+      print(default.succeed("ip link show"))
+      print("default: ", default.succeed("wg show wiring"))
+      peer.fail("ping -c 4 10.10.0.0")
+      peer.succeed("ping -c 4 10.10.0.1")
+      default.succeed("ping -c 4 10.10.0.0")
+      default.fail("ping -c 4 10.10.0.1")
+      default.fail("ping -c 4 10.10.0.8")
       peer.systemctl("status test-connection-continuity")
     '';
   });

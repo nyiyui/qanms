@@ -75,14 +75,13 @@ type InterfaceDiff struct {
 	AddressesAdded    []IPNet
 	AddressesRemoved  []IPNet
 	AddressesNoChange bool
-	PeersNoChange     bool
 	PeersAdded        []InterfacePeer
 	PeersRemoved      []InterfacePeer
 	PeersChanged      []string
 }
 
 func (diff InterfaceDiff) NoChange() bool {
-	return !diff.PrivateKeyChanged && !diff.ListenPortChanged && !diff.PeersNoChange
+	return !diff.PrivateKeyChanged && !diff.ListenPortChanged && diff.AddressesNoChange && len(diff.PeersAdded) == 0 && len(diff.PeersRemoved) == 0 && len(diff.PeersChanged) == 0
 }
 
 // DiffInterface returns a diff of Interface structs.
