@@ -8,8 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 const tokenPrefix = "qrystalct_"
@@ -41,26 +39,6 @@ func parseTokenHash(s string) ([32]byte, error) {
 		return [32]byte{}, err
 	}
 	return r, nil
-}
-
-// MarshalYAML implements yaml.Marshaler.
-func (h *TokenHash) MarshalYAML() (interface{}, error) {
-	return h.String(), nil
-}
-
-// UnmarshalYAML implements yaml.Unmarshaler.
-func (h *TokenHash) UnmarshalYAML(value *yaml.Node) error {
-	var s string
-	err := value.Decode(&s)
-	if err != nil {
-		return err
-	}
-	raw, err := parseTokenHash(s)
-	if err != nil {
-		return err
-	}
-	h.raw = raw
-	return nil
 }
 
 // MarshalJSON implements json.Marshaler.
@@ -141,26 +119,6 @@ func (t *Token) Hash() *TokenHash {
 
 func (t *Token) String() string {
 	return tokenPrefix + base64.StdEncoding.EncodeToString(t.raw)
-}
-
-// MarshalYAML implements yaml.Marshaler.
-func (t *Token) MarshalYAML() (interface{}, error) {
-	return t.String(), nil
-}
-
-// UnmarshalYAML implements yaml.Unmarshaler.
-func (t *Token) UnmarshalYAML(value *yaml.Node) error {
-	var s string
-	err := value.Decode(&s)
-	if err != nil {
-		return err
-	}
-	raw, err := parseToken(s)
-	if err != nil {
-		return err
-	}
-	t.raw = raw
-	return nil
 }
 
 // MarshalJSON implements json.Marshaler.

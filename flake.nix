@@ -100,8 +100,5 @@
         checks = (import ./test.nix) {
           inherit self system nixpkgsFor libFor nixosLibFor ldflags;
         };
-        nixosModules = ((import ./nixos-modules.nix) {
-          inherit self system nixpkgsFor libFor nixosLibFor ldflags packages;
-        }).nixosModules;
       });
 }

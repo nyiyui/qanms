@@ -1,3 +1,0 @@
-Mio runs as root and actually sets the WireGuard configuration using a
-combination of shell scripts and the wgctrl module. The main purpose is to
-not run Node as root.
