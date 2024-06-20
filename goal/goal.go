@@ -67,6 +67,7 @@ type Interface struct {
 	Addresses []IPNet
 
 	Peers []InterfacePeer
+	// TODO: forwarding
 }
 
 type InterfaceDiff struct {
@@ -180,7 +181,7 @@ type InterfacePeer struct {
 	// Set to an empty string for nothing.
 	Endpoint string
 
-	// PersistentKeepalive specifies how often a packet it sent to keep a connection alive.
+	// PersistentKeepalive specifies how often a packet is sent to keep a connection alive.
 	// Set to 0 to disable persistent keepalive.
 	PersistentKeepalive time.Duration
 
