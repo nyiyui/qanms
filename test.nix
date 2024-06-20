@@ -57,21 +57,21 @@ in {
       import os
 
       class MyTCPHandler(socketserver.BaseRequestHandler):
-          counter = 0
           def handle(self):
+              counter = 0
               while True:
                   print("waiting...")
                   self.data = self.request.recv(1024).strip()
                   print(f"received from {self.client_address[0]}: {self.data}")
-                  i = int(self.data)
+                  i = int(self.data.decode('ascii'))
+                  print('a')
                   if i != counter + 1:
                       print("out of order")
                       exit(1)
+                  counter = i
+                  print('b')
                   self.request.sendall("ok\n".encode("ascii"))
                   print("sent.")
-          def finish(self):
-              print("done")
-              exit(0)
 
       if __name__ == "__main__":
           host, port = os.getenv("HOST"), int(os.getenv("PORT"))
