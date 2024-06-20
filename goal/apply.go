@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
-	"os/exec"
 	"slices"
 
 	"github.com/vishvananda/netlink"
@@ -273,30 +271,6 @@ func ApplyInterfaceDiff(a, b Interface, id InterfaceDiff, client *wgctrl.Client,
 			}
 		}
 	}()
-
-	cmd := exec.Command("/run/current-system/sw/bin/ip", "link")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err = cmd.Run()
-	if err != nil {
-		panic(err)
-	}
-
-	cmd = exec.Command("/run/current-system/sw/bin/wg")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err = cmd.Run()
-	if err != nil {
-		panic(err)
-	}
-
-	cmd = exec.Command("/run/current-system/sw/bin/wg", "showconf", "wiring")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err = cmd.Run()
-	if err != nil {
-		panic(err)
-	}
 
 	zap.S().Debugf("add %d routes to wg interface.", len(id.PeersAdded))
 	// === add routes to wg interface ===
