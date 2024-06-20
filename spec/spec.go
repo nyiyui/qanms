@@ -1,0 +1,162 @@
+package spec
+
+import (
+	"bytes"
+	"errors"
+	"slices"
+	"time"
+
+	"github.com/nyiyui/qrystal/goal"
+)
+
+type Spec struct {
+	Networks []Network
+}
+
+func (s Spec) GetNetwork(name string) (n Network, ok bool) {
+	i, ok := s.GetNetworkIndex(name)
+	if !ok {
+		return Network{}, false
+	}
+	return s.Networks[i], true
+}
+
+func (s Spec) GetNetworkIndex(name string) (i int, ok bool) {
+	i = slices.IndexFunc(s.Networks, func(n Network) bool { return n.Name == name })
+	if i == -1 {
+		return 0, false
+	}
+	return i, true
+}
+
+type SpecCensored struct {
+	Networks []NetworkCensored
+}
+
+func (a SpecCensored) Equal(b SpecCensored) bool {
+	return slices.EqualFunc(a.Networks, b.Networks, func(a, b NetworkCensored) bool { return a.Equal(b) })
+}
+
+type Network struct {
+	Name    string
+	Devices []NetworkDevice
+}
+
+func (n Network) GetDevice(name string) (nd NetworkDevice, ok bool) {
+	for _, nd := range n.Devices {
+		if nd.Name == name {
+			return nd, true
+		}
+	}
+	return NetworkDevice{}, false
+}
+
+func (n Network) GetDeviceIndex(name string) (i int, ok bool) {
+	for _, nd := range n.Devices {
+		if nd.Name == name {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+type NetworkCensored struct {
+	Name        string
+	Devices     []NetworkDeviceCensored
+	CensoredFor string
+}
+
+func (nc NetworkCensored) GetDevice(name string) (nd NetworkDeviceCensored, ok bool) {
+	for _, nd := range nc.Devices {
+		if nd.Name == name {
+			return nd, true
+		}
+	}
+	return NetworkDeviceCensored{}, false
+}
+
+func (nc NetworkCensored) GetDeviceIndex(name string) (i int, ok bool) {
+	for _, nd := range nc.Devices {
+		if nd.Name == name {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+func (a NetworkCensored) Equal(b NetworkCensored) bool {
+	return a.Name == b.Name && slices.EqualFunc(a.Devices, b.Devices, func(a, b NetworkDeviceCensored) bool { return a.Equal(b) }) && a.CensoredFor == b.CensoredFor
+}
+
+func (n Network) CensorForDevice(censorFor string) NetworkCensored {
+	nc := NetworkCensored{Name: n.Name, CensoredFor: censorFor}
+	i := slices.IndexFunc(n.Devices, func(nd NetworkDevice) bool { return nd.Name == censorFor })
+	if i == -1 {
+		panic("censorFor device not in Network.Devices")
+	}
+	censorForDevice := n.Devices[i]
+	for _, nd := range n.Devices {
+		if censorForDevice.AccessAll || slices.Contains(censorForDevice.AccessOnly, nd.Name) {
+			nc.Devices = append(nc.Devices, nd.NetworkDeviceCensored)
+		}
+	}
+	return nc
+}
+
+type NetworkDevice struct {
+	NetworkDeviceCensored
+
+	AccessControl
+}
+
+type NetworkDeviceCensored struct {
+	Name string
+	// TODO: forwarding (keep this commented out for now)
+	// // Route represents how a packet reaches this peer.
+	// // Packets go through the peers listed (by name) in the slice.
+	// // A nil slice means that no forwarding occurs.
+	// // For example, {"A", "B"} means that a packet is forwarded to A to B to this peer.
+	// Route []string
+	// Endpoints is a unordered list of endpoints on which the peer is available on.
+	Endpoints []string
+	// EndpointChosen is whether the endpoint was chosen.
+	// This value should always be false on the server.
+	EndpointChosen bool `json:"-"`
+	// EndpointChosenIndex is the index of the chosen endpoint.
+	// This value should always be zero on the server.
+	EndpointChosenIndex int `json:"-"`
+	// Addresses is a list of IP networks that the peer represents.
+	Addresses []goal.IPNet
+
+	// ListenPort is the port that WireGuard will listen on.
+	// This can be set by this peer.
+	ListenPort int
+	// This can be set by this peer.
+	PublicKey goal.Key
+	// This can be set by this peer.
+	PresharedKey *goal.Key
+	// PersistentKeepalive specifies how often a packet is sent to keep a connection alive.
+	// Set to 0 to disable persistent keepalive.
+	// This can be set by this peer.
+	PersistentKeepalive time.Duration
+}
+
+func ipNetEqual(a, b goal.IPNet) bool {
+	return a.IP.Equal(b.IP) && bytes.Equal(a.Mask, b.Mask)
+}
+
+func (a NetworkDeviceCensored) Equal(b NetworkDeviceCensored) bool {
+	return a.Name == b.Name && slices.Equal(a.Endpoints, b.Endpoints) && slices.EqualFunc(a.Addresses, b.Addresses, ipNetEqual) && a.ListenPort == b.ListenPort && a.PublicKey == b.PublicKey && (a.PresharedKey == nil) == (b.PresharedKey == nil) && (a.PresharedKey != nil && b.PresharedKey != nil && *a.PresharedKey == *b.PresharedKey) && a.PersistentKeepalive == b.PersistentKeepalive
+}
+
+type AccessControl struct {
+	AccessAll  bool
+	AccessOnly []string
+}
+
+func (a AccessControl) Validate() error {
+	if a.AccessAll && a.AccessOnly != nil {
+		return errors.New("AccessControl.AccessOnly is not nil and AccessControl.AccessAll is true")
+	}
+	return nil
+}
