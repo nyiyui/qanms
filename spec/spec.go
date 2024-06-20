@@ -42,21 +42,16 @@ type Network struct {
 }
 
 func (n Network) GetDevice(name string) (nd NetworkDevice, ok bool) {
-	for _, nd := range n.Devices {
-		if nd.Name == name {
-			return nd, true
-		}
+	i, ok := n.GetDeviceIndex(name)
+	if !ok {
+		return NetworkDevice{}, false
 	}
-	return NetworkDevice{}, false
+	return n.Devices[i], true
 }
 
 func (n Network) GetDeviceIndex(name string) (i int, ok bool) {
-	for _, nd := range n.Devices {
-		if nd.Name == name {
-			return i, true
-		}
-	}
-	return -1, false
+	i = slices.IndexFunc(n.Devices, func(nd NetworkDevice) bool { return nd.Name == name })
+	return i, i != -1
 }
 
 type NetworkCensored struct {
@@ -65,22 +60,17 @@ type NetworkCensored struct {
 	CensoredFor string
 }
 
-func (nc NetworkCensored) GetDevice(name string) (nd NetworkDeviceCensored, ok bool) {
-	for _, nd := range nc.Devices {
-		if nd.Name == name {
-			return nd, true
-		}
+func (nc NetworkCensored) GetDevice(name string) (ndc NetworkDeviceCensored, ok bool) {
+	i, ok := nc.GetDeviceIndex(name)
+	if !ok {
+		return NetworkDeviceCensored{}, false
 	}
-	return NetworkDeviceCensored{}, false
+	return nc.Devices[i], true
 }
 
 func (nc NetworkCensored) GetDeviceIndex(name string) (i int, ok bool) {
-	for _, nd := range nc.Devices {
-		if nd.Name == name {
-			return i, true
-		}
-	}
-	return -1, false
+	i = slices.IndexFunc(nc.Devices, func(ndc NetworkDeviceCensored) bool { return ndc.Name == name })
+	return i, i != -1
 }
 
 func (a NetworkCensored) Equal(b NetworkCensored) bool {

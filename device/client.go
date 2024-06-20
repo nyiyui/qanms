@@ -88,8 +88,13 @@ func (c *Client) ReifySpec() error {
 	}
 	data, _ = json.Marshal(nc)
 	zap.S().Debugf("received spec:\n%s", data)
+	zap.S().Debugf("c.device = %s", c.device)
 
-	ndcI, _ := nc.GetDeviceIndex(c.device)
+	ndcI, ok := nc.GetDeviceIndex(c.device)
+	if !ok {
+		panic("unreachable")
+	}
+	zap.S().Debugf("ndcI = %s", ndcI)
 	ndc := &nc.Devices[ndcI]
 	// === generate private keys ===
 	if c.privateKey == (goal.Key{}) {
@@ -117,6 +122,7 @@ func (c *Client) ReifySpec() error {
 
 	// === choose endpoints ===
 	for i, ndc := range nc.Devices {
+		zap.S().Debugf("i=%d ndcI=%d ndc.Name=%d", i, ndcI, ndc.Name)
 		if i == ndcI {
 			continue
 		}
@@ -142,7 +148,7 @@ func (c *Client) ReifySpec() error {
 	// === apply spec ===
 	zap.S().Debug("compiling spec…")
 	sc := spec.SpecCensored{Networks: []spec.NetworkCensored{nc}}
-	gm, err := sc.CompileMachine(c.device)
+	gm, err := sc.CompileMachine(c.device, true)
 	if err != nil {
 		return fmt.Errorf("compile spec: %w", err)
 	}
@@ -154,6 +160,7 @@ func (c *Client) ReifySpec() error {
 	if err != nil {
 		return fmt.Errorf("apply spec: %w", err)
 	}
+	c.Machine = gm
 	zap.S().Debug("applied machine.")
 
 	// === post status ===

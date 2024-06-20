@@ -7,7 +7,7 @@ import (
 	"github.com/nyiyui/qrystal/goal"
 )
 
-func (sc SpecCensored) CompileMachine(name string) (goal.Machine, error) {
+func (sc SpecCensored) CompileMachine(name string, ignoreIncomplete bool) (goal.Machine, error) {
 	gm := goal.Machine{}
 	for _, sn := range sc.Networks {
 		sndI := slices.IndexFunc(sn.Devices, func(snd NetworkDeviceCensored) bool { return snd.Name == name })
@@ -21,10 +21,18 @@ func (sc SpecCensored) CompileMachine(name string) (goal.Machine, error) {
 				continue
 			}
 			if !snd.EndpointChosen {
-				return goal.Machine{}, fmt.Errorf("%s/%s does not have a chosen endpoint", sn.Name, snd.Name)
+				if ignoreIncomplete {
+					continue
+				} else {
+					return goal.Machine{}, fmt.Errorf("%s/%s does not have a chosen endpoint", sn.Name, snd.Name)
+				}
 			}
 			if snd.PublicKey == (goal.Key{}) {
-				return goal.Machine{}, fmt.Errorf("%s/%s has unset PublicKey", sn.Name, snd.Name)
+				if ignoreIncomplete {
+					continue
+				} else {
+					return goal.Machine{}, fmt.Errorf("%s/%s has unset PublicKey", sn.Name, snd.Name)
+				}
 			}
 			peers = append(peers, goal.InterfacePeer{
 				Name:                snd.Name,

@@ -70,5 +70,5 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	zap.S().Info("saved machine data.")
+	zap.S().Infof("saved machine data:\n%s", machineData)
 }
