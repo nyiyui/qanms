@@ -6,7 +6,6 @@ package goal
 import (
 	"bytes"
 	"sort"
-	"time"
 )
 
 type Machine struct {
@@ -183,7 +182,7 @@ type InterfacePeer struct {
 
 	// PersistentKeepalive specifies how often a packet is sent to keep a connection alive.
 	// Set to 0 to disable persistent keepalive.
-	PersistentKeepalive time.Duration
+	PersistentKeepalive Duration
 
 	AllowedIPs []IPNet
 }

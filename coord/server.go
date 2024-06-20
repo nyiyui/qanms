@@ -3,15 +3,16 @@ package coord
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/nyiyui/qrystal/goal"
 	"github.com/nyiyui/qrystal/spec"
 	"github.com/nyiyui/qrystal/util"
+	"go.uber.org/zap"
 )
 
 type TokenInfo struct {
@@ -37,6 +38,10 @@ func NewServer(spec spec.Spec, tokens map[util.TokenHash]TokenInfo) *Server {
 	}
 	s.setup()
 	return s
+}
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.mux.ServeHTTP(w, r)
 }
 
 // verifyIdentity verifies if the given request has the credentials to identify as the given network device.
@@ -110,7 +115,7 @@ type PatchReifySpecRequest struct {
 	PublicKeySet           bool
 	PresharedKey           *goal.Key
 	PresharedKeySet        bool
-	PersistentKeepalive    time.Duration
+	PersistentKeepalive    goal.Duration
 	PersistentKeepaliveSet bool
 }
 
@@ -133,10 +138,16 @@ func (s *Server) patchReifySpec(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	var req PatchReifySpecRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
+	data, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("json decode failed: %s", err), 422)
+		http.Error(w, "failed to read request body", 500)
+		return
+	}
+	var req PatchReifySpecRequest
+	err = json.Unmarshal(data, &req)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("json decode failed: %s\n%s", err, data), 422)
+		return
 	}
 	nI, _ := s.spec.GetNetworkIndex(network)
 	sndI, _ := s.spec.Networks[nI].GetDeviceIndex(device)
@@ -152,6 +163,11 @@ func (s *Server) patchReifySpec(w http.ResponseWriter, r *http.Request) {
 	if req.PersistentKeepaliveSet {
 		s.spec.Networks[nI].Devices[sndI].PersistentKeepalive = req.PersistentKeepalive
 	}
+	data, err = json.Marshal(s.spec.Networks[nI].Devices[sndI])
+	if err != nil {
+		panic(err)
+	}
+	zap.S().Infof("patched %s/%s:\n%s", network, device, data)
 	w.WriteHeader(200)
 	w.Write([]byte("done"))
 	return
@@ -180,13 +196,21 @@ func (s *Server) postReifyStatus(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read request body", 500)
+		return
+	}
 	var req PostReifyStatusRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
+	err = json.Unmarshal(data, &req)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("json decode failed: %s", err), 422)
 	}
 	nI, _ := s.spec.GetNetworkIndex(network)
 	if !req.Reified.Equal(s.spec.Networks[nI].CensorForDevice(device)) {
+		given, _ := json.Marshal(req.Reified)
+		mine, _ := json.Marshal(s.spec.Networks[nI].CensorForDevice(device))
+		zap.S().Infof("given network does not match mine:\ngiven:\n%s\nmine:\n%s", given, mine)
 		http.Error(w, "given network does not match mine", 422)
 		return
 	}

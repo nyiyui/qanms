@@ -33,7 +33,7 @@ func TestDiffInterfacePeer(t *testing.T) {
 		PublicKey:           Key{0},
 		PresharedKey:        nil,
 		Endpoint:            "127.0.0.1",
-		PersistentKeepalive: 1 * time.Second,
+		PersistentKeepalive: Duration(1 * time.Second),
 		AllowedIPs: []IPNet{
 			mustParseCIDR("10.10.1.0/25"),
 			mustParseCIDR("10.10.2.0/32"),

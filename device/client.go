@@ -56,21 +56,41 @@ func NewClient(baseURL string, token util.Token, network, device string, private
 	}, nil
 }
 
+func (c *Client) addAuthorizationHeader(r *http.Request) {
+	r.Header.Set("Authorization", "QrystalCoordIdentityToken "+c.token.String())
+}
+
 func (c *Client) ReifySpec() error {
-	resp, err := c.client.Get(c.baseURL.JoinPath(fmt.Sprintf("/v1/reify/%s/%s/spec", c.network, c.device)).String())
+	path := c.baseURL.JoinPath(fmt.Sprintf("/v1/reify/%s/%s/spec", c.network, c.device)).String()
+	zap.S().Debugf("path: %s", path)
+	req, err := http.NewRequest("GET", path, nil)
+	if err != nil {
+		panic(err)
+	}
+	c.addAuthorizationHeader(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("get spec: %w", err)
 	}
 	defer resp.Body.Close()
-	var nc spec.NetworkCensored
-	err = json.NewDecoder(resp.Body).Decode(&nc)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("get spec: %w", err)
 	}
-	data, _ := json.Marshal(nc)
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("get spec: %s: %s", resp.Status, data)
+	}
+	var nc spec.NetworkCensored
+	err = json.Unmarshal(data, &nc)
+	if err != nil {
+		zap.S().Debugf("received body:\n%s", data)
+		return fmt.Errorf("get spec: %w", err)
+	}
+	data, _ = json.Marshal(nc)
 	zap.S().Debugf("received spec:\n%s", data)
 
-	ndc, _ := nc.GetDevice(c.device)
+	ndcI, _ := nc.GetDeviceIndex(c.device)
+	ndc := &nc.Devices[ndcI]
 	// === generate private keys ===
 	if c.privateKey == (goal.Key{}) {
 		zap.S().Debug("generating private keys…")
@@ -96,15 +116,28 @@ func (c *Client) ReifySpec() error {
 	}
 
 	// === choose endpoints ===
-	if !ndc.EndpointChosen {
-		zap.S().Debug("choosing endpoint…")
-		ndcI, _ := nc.GetDeviceIndex(c.device)
-		err = nc.Devices[ndcI].ChooseEndpoint(spec.PingCommandScorer)
-		if err != nil {
-			return fmt.Errorf("choose endpoint: %w", err)
+	for i, ndc := range nc.Devices {
+		if i == ndcI {
+			continue
 		}
-		zap.S().Debugf("endpoint %s chosen.", nc.Devices[ndcI].Endpoints[nc.Devices[ndcI].EndpointChosenIndex])
+		if !ndc.EndpointChosen {
+			zap.S().Debugf("%s/%s: choosing endpoint…", c.network, ndc.Name)
+			//err = (&nc.Devices[i]).ChooseEndpoint(spec.PingCommandScorer)
+			err = (&nc.Devices[i]).ChooseEndpoint(func(string) (int, error) { return 0, nil })
+			if err != nil {
+				return fmt.Errorf("choose endpoint for %s/%s: %w", c.network, ndc.Name, err)
+			}
+			if !nc.Devices[i].EndpointChosen {
+				panic("unreachable")
+			}
+			zap.S().Debugf("%s/%s: endpoint %d (%s) chosen.", c.network, ndc.Name, ndc.EndpointChosenIndex, ndc.Endpoints[ndc.EndpointChosenIndex])
+		}
 	}
+
+	data, _ = json.MarshalIndent(ndc, "", "  ")
+	zap.S().Debugf("ndc:\n%s", data)
+	data, _ = json.MarshalIndent(nc, "", "  ")
+	zap.S().Debugf("nc:\n%s", data)
 
 	// === apply spec ===
 	zap.S().Debug("compiling spec…")
@@ -131,9 +164,19 @@ func (c *Client) ReifySpec() error {
 	if err != nil {
 		panic(fmt.Sprintf("json marshal: %s", err))
 	}
-	resp, err = c.client.Post(c.baseURL.JoinPath(fmt.Sprintf("/v1/reify/%s/%s/status", c.network, c.device)).String(), "application/json", bytes.NewBuffer(data))
+	req, err = http.NewRequest("POST", c.baseURL.JoinPath(fmt.Sprintf("/v1/reify/%s/%s/status", c.network, c.device)).String(), bytes.NewBuffer(data))
+	if err != nil {
+		panic(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.addAuthorizationHeader(req)
+	resp, err = c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("post status: %w", err)
+	}
+	if resp.StatusCode != 200 {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("post status: %s: %s", resp.Status, data)
 	}
 	zap.S().Debug("posted status.")
 	return nil
@@ -149,6 +192,7 @@ func (c *Client) patchSpec(body coord.PatchReifySpecRequest) error {
 		panic(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	c.addAuthorizationHeader(req)
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("post status: %w", err)

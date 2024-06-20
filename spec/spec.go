@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"slices"
-	"time"
 
 	"github.com/nyiyui/qrystal/goal"
 )
@@ -121,10 +120,10 @@ type NetworkDeviceCensored struct {
 	Endpoints []string
 	// EndpointChosen is whether the endpoint was chosen.
 	// This value should always be false on the server.
-	EndpointChosen bool `json:"-"`
+	EndpointChosen bool
 	// EndpointChosenIndex is the index of the chosen endpoint.
 	// This value should always be zero on the server.
-	EndpointChosenIndex int `json:"-"`
+	EndpointChosenIndex int
 	// Addresses is a list of IP networks that the peer represents.
 	Addresses []goal.IPNet
 
@@ -138,7 +137,7 @@ type NetworkDeviceCensored struct {
 	// PersistentKeepalive specifies how often a packet is sent to keep a connection alive.
 	// Set to 0 to disable persistent keepalive.
 	// This can be set by this peer.
-	PersistentKeepalive time.Duration
+	PersistentKeepalive goal.Duration
 }
 
 func ipNetEqual(a, b goal.IPNet) bool {
@@ -146,7 +145,7 @@ func ipNetEqual(a, b goal.IPNet) bool {
 }
 
 func (a NetworkDeviceCensored) Equal(b NetworkDeviceCensored) bool {
-	return a.Name == b.Name && slices.Equal(a.Endpoints, b.Endpoints) && slices.EqualFunc(a.Addresses, b.Addresses, ipNetEqual) && a.ListenPort == b.ListenPort && a.PublicKey == b.PublicKey && (a.PresharedKey == nil) == (b.PresharedKey == nil) && (a.PresharedKey != nil && b.PresharedKey != nil && *a.PresharedKey == *b.PresharedKey) && a.PersistentKeepalive == b.PersistentKeepalive
+	return a.Name == b.Name && slices.Equal(a.Endpoints, b.Endpoints) && slices.EqualFunc(a.Addresses, b.Addresses, ipNetEqual) && a.ListenPort == b.ListenPort && a.PublicKey == b.PublicKey && (a.PresharedKey != nil && b.PresharedKey != nil && *a.PresharedKey == *b.PresharedKey || a.PresharedKey == nil && b.PresharedKey == nil) && a.PersistentKeepalive == b.PersistentKeepalive
 }
 
 type AccessControl struct {
