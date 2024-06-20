@@ -28,11 +28,6 @@
         lib = import (nixpkgs + "/lib") { inherit system; };
         nixosLib = import (nixpkgs + "/nixos/lib") { inherit system; };
         ldflags = pkgs: [
-          "-X github.com/nyiyui/qrystal/mio.CommandBash=${pkgs.bash}/bin/bash"
-          "-X github.com/nyiyui/qrystal/mio.CommandWg=${pkgs.wireguard-tools}/bin/wg"
-          "-X github.com/nyiyui/qrystal/mio.CommandWgQuick=${pkgs.wireguard-tools}/bin/wg-quick"
-          "-X github.com/nyiyui/qrystal/node.CommandIp=${pkgs.iproute2}/bin/ip"
-          "-X github.com/nyiyui/qrystal/node.CommandIptables=${pkgs.iptables}/bin/iptables"
           "-race"
         ];
       in rec {
@@ -62,9 +57,9 @@
 
             tags = [ "nix" "sdnotify" ];
 
-            #vendorHash = pkgs.lib.fakeSha256;
+            #vendorHash = pkgs.lib.fakeHash;
             vendorHash =
-              "sha256-v6aXvMA+JBJT9tjQqsDuRK8SxRBu83KchsQeXu4c3Co=";
+              "sha256-rYl0SjNxXXKAMfZT0sHuW/Q7hQIhBdKK0ubj6mm20Wc=";
           };
         in {
           runner = pkgs.buildGoModule (common // {
