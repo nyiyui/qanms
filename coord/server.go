@@ -23,8 +23,11 @@ type Server struct {
 	mux      *http.ServeMux
 	spec     spec.Spec
 	specLock sync.RWMutex
-	latest   map[string][]string
-	tokens   map[util.TokenHash]TokenInfo
+	// latest lists which devices have applied the latest spec.
+	// The key is the network name, and the value is the list of device names.
+	latest     map[string][]string
+	latestLock sync.RWMutex
+	tokens     map[util.TokenHash]TokenInfo
 }
 
 func NewServer(spec spec.Spec, tokens map[util.TokenHash]TokenInfo) *Server {
@@ -42,6 +45,13 @@ func NewServer(spec spec.Spec, tokens map[util.TokenHash]TokenInfo) *Server {
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
+}
+
+func (s *Server) setup() {
+	s.mux.HandleFunc("GET /v1/reify/{network}/{device}/latest", s.getReifyLatest)
+	s.mux.HandleFunc("GET /v1/reify/{network}/{device}/spec", s.getReifySpec)
+	s.mux.HandleFunc("PATCH /v1/reify/{network}/{device}/spec", s.patchReifySpec)
+	s.mux.HandleFunc("POST /v1/reify/{network}/{device}/status", s.postReifyStatus)
 }
 
 // verifyIdentity verifies if the given request has the credentials to identify as the given network device.
@@ -72,10 +82,40 @@ func (s *Server) verifyIdentity(w http.ResponseWriter, r *http.Request, network,
 	return true
 }
 
-func (s *Server) setup() {
-	s.mux.HandleFunc("GET /v1/reify/{network}/{device}/spec", s.getReifySpec)
-	s.mux.HandleFunc("PATCH /v1/reify/{network}/{device}/spec", s.patchReifySpec)
-	s.mux.HandleFunc("POST /v1/reify/{network}/{device}/status", s.postReifyStatus)
+type GetReifyLatestResponse struct {
+	Latest bool
+}
+
+func (s *Server) getReifyLatest(w http.ResponseWriter, r *http.Request) {
+	network := r.PathValue("network")
+	device := r.PathValue("device")
+	if !s.verifyIdentity(w, r, network, device) {
+		return
+	}
+	s.specLock.RLock()
+	defer s.specLock.RUnlock()
+	{
+		sn, ok := s.spec.GetNetwork(network)
+		if !ok {
+			http.Error(w, "network not found", 404)
+			return
+		}
+		if _, ok = sn.GetDevice(device); !ok {
+			http.Error(w, "device not found", 404)
+			return
+		}
+	}
+	s.latestLock.RLock()
+	defer s.latestLock.RUnlock()
+	var response string
+	if slices.Contains(s.latest[network], device) {
+		response = `{"Latest":true}`
+	} else {
+		response = `{"Latest":false}`
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	w.Write([]byte(response))
 }
 
 func (s *Server) getReifySpec(w http.ResponseWriter, r *http.Request) {
@@ -102,7 +142,6 @@ func (s *Server) getReifySpec(w http.ResponseWriter, r *http.Request) {
 	data, err := json.Marshal(nc)
 	if err != nil {
 		panic(err)
-		return
 	}
 	w.WriteHeader(200)
 	w.Write(data)
@@ -146,35 +185,42 @@ func (s *Server) patchReifySpec(w http.ResponseWriter, r *http.Request) {
 	var req PatchReifySpecRequest
 	err = json.Unmarshal(data, &req)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("json decode failed: %s\n%s", err, data), 422)
+		http.Error(w, fmt.Sprintf("json decode failed: %s\n%s", err, data), 400)
 		return
 	}
-	nI, _ := s.spec.GetNetworkIndex(network)
-	sndI, _ := s.spec.Networks[nI].GetDeviceIndex(device)
+	newSpec := s.spec.Clone()
+	nI, _ := newSpec.GetNetworkIndex(network)
+	sndI, _ := newSpec.Networks[nI].GetDeviceIndex(device)
 	if req.ListenPortSet {
-		s.spec.Networks[nI].Devices[sndI].ListenPort = req.ListenPort
+		newSpec.Networks[nI].Devices[sndI].ListenPort = req.ListenPort
 	}
 	if req.PublicKeySet {
-		s.spec.Networks[nI].Devices[sndI].PublicKey = req.PublicKey
+		newSpec.Networks[nI].Devices[sndI].PublicKey = req.PublicKey
 	}
 	if req.PresharedKeySet {
-		s.spec.Networks[nI].Devices[sndI].PresharedKey = req.PresharedKey
+		newSpec.Networks[nI].Devices[sndI].PresharedKey = req.PresharedKey
 	}
 	if req.PersistentKeepaliveSet {
-		s.spec.Networks[nI].Devices[sndI].PersistentKeepalive = req.PersistentKeepalive
+		newSpec.Networks[nI].Devices[sndI].PersistentKeepalive = req.PersistentKeepalive
 	}
+	s.latestLock.Lock()
+	defer s.latestLock.Unlock()
+	s.updateSpecNoLock(newSpec)
 	data, err = json.Marshal(s.spec.Networks[nI].Devices[sndI])
 	if err != nil {
 		panic(err)
 	}
 	zap.S().Infof("patched %s/%s:\n%s", network, device, data)
-	w.WriteHeader(200)
-	w.Write([]byte("done"))
+	w.WriteHeader(204)
 	return
 }
 
 type PostReifyStatusRequest struct {
 	Reified spec.NetworkCensored
+}
+
+type PostReifyStatusResponse struct {
+	Latest bool
 }
 
 func (s *Server) postReifyStatus(w http.ResponseWriter, r *http.Request) {
@@ -204,22 +250,33 @@ func (s *Server) postReifyStatus(w http.ResponseWriter, r *http.Request) {
 	var req PostReifyStatusRequest
 	err = json.Unmarshal(data, &req)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("json decode failed: %s", err), 422)
+		http.Error(w, fmt.Sprintf("json decode failed: %s", err), 400)
 	}
 	nI, _ := s.spec.GetNetworkIndex(network)
 	if !req.Reified.Equal(s.spec.Networks[nI].CensorForDevice(device)) {
 		given, _ := json.Marshal(req.Reified)
 		mine, _ := json.Marshal(s.spec.Networks[nI].CensorForDevice(device))
 		zap.S().Infof("given network does not match mine:\ngiven:\n%s\nmine:\n%s", given, mine)
-		http.Error(w, "given network does not match mine", 422)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		err := json.NewEncoder(w).Encode(PostReifyStatusResponse{false})
+		if err != nil {
+			zap.S().Error("json encode and HTTP write of PostReifyStatusResponse failed: %s", err)
+		}
 		return
 	}
 
+	s.latestLock.Lock()
+	defer s.latestLock.Unlock()
 	if s.latest == nil {
 		s.latest = map[string][]string{}
 	}
 	s.latest[network] = append(s.latest[network], device)
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
-	w.Write([]byte("done"))
+	err = json.NewEncoder(w).Encode(PostReifyStatusResponse{true})
+	if err != nil {
+		zap.S().Error("json encode and HTTP write of PostReifyStatusResponse failed: %s", err)
+	}
 	return
 }

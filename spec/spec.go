@@ -12,6 +12,15 @@ type Spec struct {
 	Networks []Network
 }
 
+func (s Spec) Clone() Spec {
+	panic("not implemented yet")
+	//newSpec := Spec{Networks: make([]Network, len(s.Networks))}
+	//for i, sn := range s.Networks {
+	//	newSpec.Networks[i] = sn.Clone()
+	//}
+	//return newSpec
+}
+
 func (s Spec) GetNetwork(name string) (n Network, ok bool) {
 	i, ok := s.GetNetworkIndex(name)
 	if !ok {

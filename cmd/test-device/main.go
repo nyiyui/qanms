@@ -36,7 +36,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	zap.S().Info("parsing configuration.")
+	zap.S().Info("parsed configuration.")
 
 	c, err := device.NewClient(config.BaseURL, config.Token, config.Network, config.Device, config.PrivateKey)
 	if err != nil {
@@ -57,9 +57,12 @@ func main() {
 		panic(err)
 	}
 	zap.S().Infof("parsed machine data:\n%s", data)
-	err = c.ReifySpec()
+	latest, err := c.ReifySpec()
 	if err != nil {
 		panic(err)
+	}
+	if !latest {
+		panic("posted but already not latest")
 	}
 	zap.S().Info("reified spec.")
 	machineData, err = json.Marshal(c.Machine)

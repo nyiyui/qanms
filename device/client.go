@@ -60,7 +60,7 @@ func (c *Client) addAuthorizationHeader(r *http.Request) {
 	r.Header.Set("Authorization", "QrystalCoordIdentityToken "+c.token.String())
 }
 
-func (c *Client) ReifySpec() error {
+func (c *Client) ReifySpec() (latest bool, err error) {
 	path := c.baseURL.JoinPath(fmt.Sprintf("/v1/reify/%s/%s/spec", c.network, c.device)).String()
 	zap.S().Debugf("path: %s", path)
 	req, err := http.NewRequest("GET", path, nil)
@@ -70,21 +70,21 @@ func (c *Client) ReifySpec() error {
 	c.addAuthorizationHeader(req)
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("get spec: %w", err)
+		return false, fmt.Errorf("get spec: %w", err)
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("get spec: %w", err)
+		return false, fmt.Errorf("get spec: %w", err)
 	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("get spec: %s: %s", resp.Status, data)
+	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+		return false, fmt.Errorf("get spec: %s: %s", resp.Status, data)
 	}
 	var nc spec.NetworkCensored
 	err = json.Unmarshal(data, &nc)
 	if err != nil {
 		zap.S().Debugf("received body:\n%s", data)
-		return fmt.Errorf("get spec: %w", err)
+		return false, fmt.Errorf("get spec: %w", err)
 	}
 	data, _ = json.Marshal(nc)
 	zap.S().Debugf("received spec:\n%s", data)
@@ -114,7 +114,7 @@ func (c *Client) ReifySpec() error {
 			PublicKeySet: true,
 		})
 		if err != nil {
-			return fmt.Errorf("patch spec: %w", err)
+			return false, fmt.Errorf("patch spec: %w", err)
 		}
 		ndc.PublicKey = goal.Key(wgtypes.Key(c.privateKey).PublicKey())
 		zap.S().Debug("patched spec public key.")
@@ -131,7 +131,7 @@ func (c *Client) ReifySpec() error {
 			//err = (&nc.Devices[i]).ChooseEndpoint(spec.PingCommandScorer)
 			err = (&nc.Devices[i]).ChooseEndpoint(func(string) (int, error) { return 0, nil })
 			if err != nil {
-				return fmt.Errorf("choose endpoint for %s/%s: %w", c.network, ndc.Name, err)
+				return false, fmt.Errorf("choose endpoint for %s/%s: %w", c.network, ndc.Name, err)
 			}
 			if !nc.Devices[i].EndpointChosen {
 				panic("unreachable")
@@ -150,7 +150,7 @@ func (c *Client) ReifySpec() error {
 	sc := spec.SpecCensored{Networks: []spec.NetworkCensored{nc}}
 	gm, err := sc.CompileMachine(c.device, true)
 	if err != nil {
-		return fmt.Errorf("compile spec: %w", err)
+		return false, fmt.Errorf("compile spec: %w", err)
 	}
 	gm.Interfaces[0].PrivateKey = goal.Key(c.privateKey)
 	data, _ = json.Marshal(gm)
@@ -158,7 +158,7 @@ func (c *Client) ReifySpec() error {
 	zap.S().Debug("applying machine…")
 	err = goal.ApplyMachineDiff(c.Machine, gm, goal.DiffMachine(&c.Machine, &gm), c.wgClient, c.netlinkHandle)
 	if err != nil {
-		return fmt.Errorf("apply spec: %w", err)
+		return false, fmt.Errorf("apply spec: %w", err)
 	}
 	c.Machine = gm
 	zap.S().Debug("applied machine.")
@@ -179,14 +179,19 @@ func (c *Client) ReifySpec() error {
 	c.addAuthorizationHeader(req)
 	resp, err = c.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("post status: %w", err)
+		return false, fmt.Errorf("post status: %w", err)
 	}
-	if resp.StatusCode != 200 {
-		data, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("post status: %s: %s", resp.Status, data)
+	data, _ = io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+		return false, fmt.Errorf("post status: %s: %s", resp.Status, data)
+	}
+	var respData coord.PostReifyStatusResponse
+	err = json.Unmarshal(data, &resp)
+	if err != nil {
+		return false, fmt.Errorf("json decode: %w", err)
 	}
 	zap.S().Debug("posted status.")
-	return nil
+	return respData.Latest, nil
 }
 
 func (c *Client) patchSpec(body coord.PatchReifySpecRequest) error {
@@ -205,7 +210,7 @@ func (c *Client) patchSpec(body coord.PatchReifySpecRequest) error {
 		return fmt.Errorf("post status: %w", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != 200 && resp.StatusCode != 204 {
 		data, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("%s: %s", resp.Status, data)
 	}
