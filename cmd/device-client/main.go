@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -25,7 +27,7 @@ type ClientConfig struct {
 	Network         string
 	Device          string
 	PrivateKey      goal.Key
-	MinimumInterval time.Duration
+	MinimumInterval goal.Duration
 }
 
 type MachineData struct {
@@ -66,7 +68,7 @@ func main() {
 	util.SetupLog()
 
 	var configPath string
-	flag.StringVar(&configPath, "config-path", "", "path to config file")
+	flag.StringVar(&configPath, "config", "", "path to config file")
 	flag.Parse()
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
@@ -83,14 +85,24 @@ func main() {
 	}
 	zap.S().Infof("parsed config:\n%s", data)
 
-	m, err := LoadMachineData(filepath.Join(os.Getenv("STATE_DIRECTORY"), "MachineData.json"))
+	path := filepath.Join(os.Getenv("STATE_DIRECTORY"), "MachineData.json")
+	m, err := LoadMachineData(path)
 	if err != nil {
-		zap.S().Fatalf("loading machine data failed: %s", err)
+		zap.S().Debugf("IsNotExist=%t", os.IsNotExist(err))
+		if errors.Is(err, fs.ErrNotExist) {
+			zap.S().Info("no machine data found. Creating a blank one…")
+			m = new(MachineData)
+			m.Machines = map[string]goal.Machine{}
+			m.path = path
+		} else {
+			zap.S().Fatalf("loading machine data failed: %s", err)
+		}
 	}
 	createGoroutines(m, config)
 }
 
 func createGoroutines(m *MachineData, config Config) {
+	util.Notify("READY=1\nSTATUS=starting…")
 	for clientName, clientConfig := range config.Clients {
 		go func(clientName string, clientConfig ClientConfig) {
 			c, err := device.NewClient(clientConfig.BaseURL, clientConfig.Token, clientConfig.Network, clientConfig.Device, clientConfig.PrivateKey)
@@ -101,7 +113,7 @@ func createGoroutines(m *MachineData, config Config) {
 			cc.Client = c
 			zap.S().Infof("%s: created client.", clientName)
 
-			t := time.NewTicker(clientConfig.MinimumInterval)
+			t := time.NewTicker(time.Duration(clientConfig.MinimumInterval))
 			for range t.C {
 				latest := false
 				for !latest {
@@ -132,4 +144,5 @@ func createGoroutines(m *MachineData, config Config) {
 			}
 		}(clientName, clientConfig)
 	}
+	select {}
 }

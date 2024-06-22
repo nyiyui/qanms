@@ -388,4 +388,114 @@ in {
       client2.succeed("ping -c 2 10.10.0.2")
     '';
   });
+  coordServerIntegration-continuous-single = lib.runTest (let
+    etc = self.outputs.packages.${system}.etc;
+    serverPort = 39390;
+    client1PrivateKey = "WMRg3WjzE0ZLuP4bAWtvcrh/Tw23MR3kv4VjpAQQz04=";
+    client1PublicKey = "0LrS7ekXRHD8pLEimzLfeLlKyPprJR9oJwdAMOGhtU0=";
+    client2PrivateKey = "AFiQ0ipcWrEluvCmaEoQ7PQeurOo3bVRXANAOXYny0s=";
+    client2PublicKey = "J4nZeURCVbUmo5w/IBnaCU9M5tOMqGRZnPB2vAji4hE=";
+    client1TokenHash =
+      "qrystalcth_30e72874f2598c1ad8020507182a4f57a7304806947b677b69c7d76a88003bc6";
+    client1Config = pkgs.writeText "client1config.json" (builtins.toJSON {
+      Clients = {
+        "server" = {
+          BaseURL = "http://server:${builtins.toString serverPort}";
+          Token =
+            "qrystalct_ZXcX7NyjY2aqiy5bb7Oe952QSCsVxzh2FU2ahvaPiHZPJaWeN+Xi59HHvqTDT0Tyy7IOhzC9Uc3Nn7dQ+8GhbQ==";
+          Network = "wiring";
+          Device = "client1";
+          PrivateKey = client1PrivateKey;
+          MinimumInterval = "20s";
+        };
+      };
+    });
+    tokens = {
+      ${client1TokenHash} = { Identities = [[ "wiring" "client1" ]]; };
+    };
+    spec.Networks = [{
+      Name = "wiring";
+      Devices = [
+        {
+          Name = "client1";
+          Endpoints = [ "client1:51820" ];
+          Addresses = [ "10.10.0.1/32" ];
+          ListenPort = 51820;
+          PersistentKeepalive = "1s";
+          AccessAll = true;
+        }
+        {
+          Name = "client2";
+          Endpoints = [ "client2:51820" ];
+          Addresses = [ "10.10.0.2/32" ];
+          ListenPort = 51820;
+          PublicKey = client2PublicKey;
+          AccessAll = true;
+        }
+      ];
+    }];
+    serverConfig = pkgs.writeText "serverConfig.json" (builtins.toJSON {
+      Tokens = tokens;
+      Spec = spec;
+      Addr = "0.0.0.0:${builtins.toString serverPort}";
+    });
+  in {
+    name = "coordServerIntegration-continuous-single";
+    hostPkgs = pkgs;
+    nodes.server = { pkgs, ... }: { # not a wg peer
+      imports = [ base ];
+      systemd.services.qrystal-coord-server = {
+        script = ''
+          QRYSTAL_LOGGING_CONFIG=development ${etc}/bin/coord-server --config=${serverConfig}
+        '';
+        serviceConfig = {
+          Type = "notify";
+          NotifyAccess = "all";
+        };
+      };
+      networking.firewall.allowedTCPPorts = [ serverPort ];
+    };
+    nodes.client1 = { pkgs, ... }: { # wg peer setup using test-device
+      imports = [ base ];
+      systemd.services.qrystal-device-client = {
+        script = ''
+          QRYSTAL_LOGGING_CONFIG=development ${etc}/bin/device-client --config=${client1Config}
+        '';
+        serviceConfig = {
+          Type = "notify";
+          NotifyAccess = "all";
+          StateDirectory = [ "qrystal-device-client" ];
+        };
+      };
+    };
+    nodes.client2 =
+      { pkgs, ... }: { # wg peer setup using NixOS's wireguard module
+        imports = [ base ];
+        networking.wireguard.interfaces = {
+          wiring = {
+            ips = [ "10.10.0.2/32" ];
+            privateKey = client2PrivateKey;
+            listenPort = 51820;
+            peers = [{
+              publicKey = client1PublicKey;
+              allowedIPs = [ "10.10.0.1/32" ];
+              endpoint = "client1:51820";
+              persistentKeepalive = 1;
+            }];
+          };
+        };
+      };
+    testScript = { ... }: ''
+      start_all()
+      server.systemctl("start qrystal-coord-server.service")
+      server.wait_until_succeeds("systemctl status qrystal-coord-server.service")
+      client1.systemctl("start qrystal-device-client.service")
+      client1.wait_until_succeeds("systemctl status qrystal-device-client.service")
+      server.succeed("systemctl status qrystal-coord-server.service")
+      client1.wait_until_succeeds("ping -c 2 10.10.0.1")
+      client1.wait_until_succeeds("ping -c 2 10.10.0.2")
+      client2.succeed("ping -c 2 10.10.0.1")
+      client2.succeed("ping -c 2 10.10.0.2")
+    '';
+  });
 }

@@ -46,6 +46,7 @@ func (s *Server) updateSpecNoLock(newSpec spec.Spec) {
 		}
 		s.latest[newSN.Name] = sliceUnion(keep, s.latest[newSN.Name])
 	}
+	s.spec = newSpec
 }
 
 // sliceUnion returns the union of the two given slices.

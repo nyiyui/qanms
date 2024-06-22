@@ -13,12 +13,11 @@ type Spec struct {
 }
 
 func (s Spec) Clone() Spec {
-	panic("not implemented yet")
-	//newSpec := Spec{Networks: make([]Network, len(s.Networks))}
-	//for i, sn := range s.Networks {
-	//	newSpec.Networks[i] = sn.Clone()
-	//}
-	//return newSpec
+	newSpec := Spec{Networks: make([]Network, len(s.Networks))}
+	for i, sn := range s.Networks {
+		newSpec.Networks[i] = sn.Clone()
+	}
+	return newSpec
 }
 
 func (s Spec) GetNetwork(name string) (n Network, ok bool) {
@@ -61,6 +60,14 @@ func (n Network) GetDevice(name string) (nd NetworkDevice, ok bool) {
 func (n Network) GetDeviceIndex(name string) (i int, ok bool) {
 	i = slices.IndexFunc(n.Devices, func(nd NetworkDevice) bool { return nd.Name == name })
 	return i, i != -1
+}
+
+func (n Network) Clone() Network {
+	devices := make([]NetworkDevice, len(n.Devices))
+	for i, nd := range n.Devices {
+		devices[i] = nd.Clone()
+	}
+	return Network{n.Name, devices}
 }
 
 type NetworkCensored struct {
@@ -107,6 +114,13 @@ type NetworkDevice struct {
 	AccessControl
 }
 
+func (nd NetworkDevice) Clone() NetworkDevice {
+	return NetworkDevice{
+		NetworkDeviceCensored: nd.NetworkDeviceCensored.Clone(),
+		AccessControl:         nd.AccessControl.Clone(),
+	}
+}
+
 type NetworkDeviceCensored struct {
 	Name string
 	// TODO: forwarding (keep this commented out for now)
@@ -147,6 +161,32 @@ func (a NetworkDeviceCensored) Equal(b NetworkDeviceCensored) bool {
 	return a.Name == b.Name && slices.Equal(a.Endpoints, b.Endpoints) && slices.EqualFunc(a.Addresses, b.Addresses, ipNetEqual) && a.ListenPort == b.ListenPort && a.PublicKey == b.PublicKey && (a.PresharedKey != nil && b.PresharedKey != nil && *a.PresharedKey == *b.PresharedKey || a.PresharedKey == nil && b.PresharedKey == nil) && a.PersistentKeepalive == b.PersistentKeepalive
 }
 
+func (ndc NetworkDeviceCensored) Clone() NetworkDeviceCensored {
+	ndc2 := NetworkDeviceCensored{
+		Name:                ndc.Name,
+		EndpointChosen:      ndc.EndpointChosen,
+		EndpointChosenIndex: ndc.EndpointChosenIndex,
+		ListenPort:          ndc.ListenPort,
+		PublicKey:           ndc.PublicKey,
+		PersistentKeepalive: ndc.PersistentKeepalive,
+	}
+	ndc2.Endpoints = make([]string, len(ndc.Endpoints))
+	copy(ndc2.Endpoints, ndc.Endpoints)
+	ndc2.Addresses = make([]goal.IPNet, len(ndc.Addresses))
+	for i, addr := range ndc.Addresses {
+		ndc2.Addresses[i].IP = make([]byte, len(addr.IP))
+		copy(ndc2.Addresses[i].IP, addr.IP)
+		ndc2.Addresses[i].Mask = make([]byte, len(addr.Mask))
+		copy(ndc2.Addresses[i].Mask, addr.Mask)
+	}
+	if ndc.PresharedKey != nil {
+		presharedKey := new(goal.Key)
+		copy(presharedKey[:], ndc.PresharedKey[:])
+		ndc2.PresharedKey = presharedKey
+	}
+	return ndc2
+}
+
 type AccessControl struct {
 	AccessAll  bool
 	AccessOnly []string
@@ -157,4 +197,15 @@ func (a AccessControl) Validate() error {
 		return errors.New("AccessControl.AccessOnly is not nil and AccessControl.AccessAll is true")
 	}
 	return nil
+}
+
+func (a AccessControl) Clone() AccessControl {
+	a2 := AccessControl{
+		AccessAll: a.AccessAll,
+	}
+	if a.AccessOnly != nil {
+		a2.AccessOnly = make([]string, len(a.AccessOnly))
+		copy(a2.AccessOnly, a.AccessOnly)
+	}
+	return a2
 }

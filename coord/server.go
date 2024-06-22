@@ -37,6 +37,7 @@ func NewServer(spec spec.Spec, tokens map[util.TokenHash]TokenInfo) *Server {
 	s := &Server{
 		mux:    http.NewServeMux(),
 		spec:   spec,
+		latest: map[string][]string{},
 		tokens: tokens,
 	}
 	s.setup()
