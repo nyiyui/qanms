@@ -186,11 +186,10 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 		return false, fmt.Errorf("post status: %s: %s", resp.Status, data)
 	}
 	var respData coord.PostReifyStatusResponse
-	err = json.Unmarshal(data, &resp)
+	err = json.Unmarshal(data, &respData)
 	if err != nil {
 		return false, fmt.Errorf("json decode: %w", err)
 	}
-	zap.S().Debug("posted status.")
 	return respData.Latest, nil
 }
 
