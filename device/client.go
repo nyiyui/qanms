@@ -7,8 +7,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync"
 
 	"github.com/nyiyui/qrystal/coord"
+	"github.com/nyiyui/qrystal/dns"
 	"github.com/nyiyui/qrystal/goal"
 	"github.com/nyiyui/qrystal/spec"
 	"github.com/nyiyui/qrystal/util"
@@ -24,7 +26,10 @@ type Client struct {
 	Machine       goal.Machine
 	wgClient      *wgctrl.Client
 	netlinkHandle *netlink.Handle
+	dns           *dns.RPCClient
+	dnsLock       sync.Mutex
 
+	spec       spec.SpecCensored
 	token      util.Token
 	network    string
 	device     string
@@ -54,6 +59,26 @@ func NewClient(baseURL string, token util.Token, network, device string, private
 		device:        device,
 		privateKey:    privateKey,
 	}, nil
+}
+
+func (c *Client) SetDNSClient(client *dns.RPCClient) {
+	c.dnsLock.Lock()
+	defer c.dnsLock.Unlock()
+	c.dns = client
+}
+
+func (c *Client) updateDNS() error {
+	c.dnsLock.Lock()
+	defer c.dnsLock.Unlock()
+	if c.dns != nil {
+		zap.S().Debug("updating DNS server…")
+		err := c.dns.UpdateSpec(c.spec)
+		if err != nil {
+			return fmt.Errorf("update DNS server: %w", err)
+		}
+		zap.S().Debug("done updating DNS server.")
+	}
+	return nil
 }
 
 func (c *Client) addAuthorizationHeader(r *http.Request) {
@@ -144,11 +169,17 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 	zap.S().Debugf("ndc:\n%s", data)
 	data, _ = json.MarshalIndent(nc, "", "  ")
 	zap.S().Debugf("nc:\n%s", data)
+	c.spec = spec.SpecCensored{Networks: []spec.NetworkCensored{nc}}
+
+	// === update DNS ===
+	err = c.updateDNS()
+	if err != nil {
+		return false, fmt.Errorf("update DNS server: %w", err)
+	}
 
 	// === apply spec ===
 	zap.S().Debug("compiling spec…")
-	sc := spec.SpecCensored{Networks: []spec.NetworkCensored{nc}}
-	gm, err := sc.CompileMachine(c.device, true)
+	gm, err := c.spec.CompileMachine(c.device, true)
 	if err != nil {
 		return false, fmt.Errorf("compile spec: %w", err)
 	}

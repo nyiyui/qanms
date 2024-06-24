@@ -41,8 +41,9 @@
               protobuf
               protoc-gen-go
               protoc-gen-go-grpc
-              nixfmt
+              nixfmt-rfc-style
               govulncheck
+              nix-prefetch
             ];
           };
         };
@@ -59,7 +60,7 @@
 
             #vendorHash = pkgs.lib.fakeHash;
             vendorHash =
-              "sha256-rYl0SjNxXXKAMfZT0sHuW/Q7hQIhBdKK0ubj6mm20Wc=";
+              "sha256-jZy0Woqnj7QDL9jRHKEPdjgmPBWNpqXt8clr+gCklfQ=";
           };
         in {
           runner = pkgs.buildGoModule (common // {

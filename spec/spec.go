@@ -44,6 +44,22 @@ func (a SpecCensored) Equal(b SpecCensored) bool {
 	return slices.EqualFunc(a.Networks, b.Networks, func(a, b NetworkCensored) bool { return a.Equal(b) })
 }
 
+func (s SpecCensored) GetNetwork(name string) (n NetworkCensored, ok bool) {
+	i, ok := s.GetNetworkIndex(name)
+	if !ok {
+		return NetworkCensored{}, false
+	}
+	return s.Networks[i], true
+}
+
+func (s SpecCensored) GetNetworkIndex(name string) (i int, ok bool) {
+	i = slices.IndexFunc(s.Networks, func(n NetworkCensored) bool { return n.Name == name })
+	if i == -1 {
+		return 0, false
+	}
+	return i, true
+}
+
 type Network struct {
 	Name    string
 	Devices []NetworkDevice

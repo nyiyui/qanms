@@ -58,5 +58,7 @@ func (c *ContinousClient) getLatest() (latest bool, err error) {
 		zap.S().Debugf("received body:\n%s", data)
 		return false, fmt.Errorf("get latest: %w", err)
 	}
+	zap.S().Debugf("received body:\n%s", data)
+	zap.S().Debugf("respData: %#v", respData)
 	return respData.Latest, nil
 }

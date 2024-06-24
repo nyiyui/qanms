@@ -10,34 +10,21 @@ version).
 
 ## Installation
 
-Make sure to open the appropriate ports (defaults listed below):
-- CS: 39252/tcp for Nodes and 39253 for utilities
-- The WireGuard ports for UDP (from the expected peers)
+TODO
 
-### Most Linux distros
+## Contributinh
 
-```sh
-$ git clone https://github.com/nyiyui/qrystal
-$ cd qrystal
-$ mkdir build && cd build
-$ make src=.. -f ../Makefile
-# make src=.. -f ../Makefile install
-```
+Using [Nix](https://nixos.org/download/) and [direnv](https://direnv.net/) is recommended. To set up, install Nix and direnv, cd into this repo, then run `direnv allow`. This will setup your `$PATH` to have all the tools needed (and with the right versions) to develop.
 
-Then, enable/start `qrystal-runner.service` (Node) and/or `qrystal-cs.service` (CS)
-(depending on what you want to run).
+Testing should be done using `go test ./...` for Go tests and `nix flake check` for NixOS tests. Note that `nix flake check` downloads a lot of files and is fairly slow/expensive (involves starting multiple VMs for testing).
 
-### NixOS
-
-Flakes are recommended. See `flake.nix` for options.
-
-## Installation from Generic Archive
-
-```
-# make pre_install # if Qrystal services are already running
-# make src=. install
-# systemctl start qrystal-runner # for Node
-# systemctl start qrystal-cs # for CS
+Additionally, individual NixOS tests can be run:
+```shell
+# Example for running `goal` test:
+nix build --print-build-logs .#checks.x86_64-linux.goal
+# Run an interactive test:
+nix build --print-build-logs .#checks.x86_64-linux.goal.driverInteractive && ./result/bin/nixos-test-driver
+# Opens a Python REPL; run `test_script()` to run the test itself. See <https://wiki.nixos.org/wiki/NixOS_VM_tests> for details.
 ```
 
 ## TODO

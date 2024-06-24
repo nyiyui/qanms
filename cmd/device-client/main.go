@@ -6,12 +6,14 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
+	"net/rpc"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/nyiyui/qrystal/device"
+	"github.com/nyiyui/qrystal/dns"
 	"github.com/nyiyui/qrystal/goal"
 	"github.com/nyiyui/qrystal/util"
 	"go.uber.org/zap"
@@ -68,7 +70,9 @@ func main() {
 	util.SetupLog()
 
 	var configPath string
-	flag.StringVar(&configPath, "config", "", "path to config file")
+	var dnsSocketPath string
+	flag.StringVar(&configPath, "config", "", "path to config file (required)")
+	flag.StringVar(&dnsSocketPath, "dns-socket", "", "socket to connect to DNS server (optional)")
 	flag.Parse()
 	configData, err := os.ReadFile(configPath)
 	if err != nil {
@@ -85,6 +89,17 @@ func main() {
 	}
 	zap.S().Infof("parsed config:\n%s", data)
 
+	var dnsClient *dns.RPCClient
+	if dnsSocketPath != "" {
+		zap.S().Infof("connecting to DNS server at %s…", dnsSocketPath)
+		rpcClient, err := rpc.Dial("unix", dnsSocketPath)
+		if err != nil {
+			zap.S().Fatalf("connecting to DNS server failed: %s", err)
+		}
+		dnsClient = dns.NewRPCClient(rpcClient)
+		zap.S().Info("done connecting to DNS server.")
+	}
+
 	path := filepath.Join(os.Getenv("STATE_DIRECTORY"), "MachineData.json")
 	m, err := LoadMachineData(path)
 	if err != nil {
@@ -98,10 +113,10 @@ func main() {
 			zap.S().Fatalf("loading machine data failed: %s", err)
 		}
 	}
-	createGoroutines(m, config)
+	createGoroutines(m, dnsClient, config)
 }
 
-func createGoroutines(m *MachineData, config Config) {
+func createGoroutines(m *MachineData, dnsClient *dns.RPCClient, config Config) {
 	util.Notify("READY=1\nSTATUS=starting…")
 	for clientName, clientConfig := range config.Clients {
 		go func(clientName string, clientConfig ClientConfig) {
@@ -109,6 +124,7 @@ func createGoroutines(m *MachineData, config Config) {
 			if err != nil {
 				panic(err)
 			}
+			c.SetDNSClient(dnsClient)
 			cc := new(device.ContinousClient)
 			cc.Client = c
 			zap.S().Infof("%s: created client.", clientName)
@@ -119,9 +135,10 @@ func createGoroutines(m *MachineData, config Config) {
 				for !latest {
 					var updated bool
 					var err error
-					updated, latest, err = cc.Step()
+					latest, updated, err = cc.Step()
 					if err != nil {
 						zap.S().Errorf("%s: %s", clientName, err)
+						break
 					}
 					if updated {
 						m.setMachine(clientName, c.Machine)
@@ -140,6 +157,8 @@ func createGoroutines(m *MachineData, config Config) {
 						}
 						break
 					}
+					zap.S().Info("sleeping 1 second until next loop.")
+					time.Sleep(1 * time.Second)
 				}
 			}
 		}(clientName, clientConfig)
