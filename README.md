@@ -12,7 +12,7 @@ version).
 
 TODO
 
-## Contributinh
+## Contributing
 
 Using [Nix](https://nixos.org/download/) and [direnv](https://direnv.net/) is recommended. To set up, install Nix and direnv, cd into this repo, then run `direnv allow`. This will setup your `$PATH` to have all the tools needed (and with the right versions) to develop.
 
