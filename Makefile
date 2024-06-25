@@ -23,7 +23,7 @@ install-coord: coord-server
 	#
 	mkdir -p ${pkgdir}/usr/lib/systemd/system
 	install ${src}/config/coord-server.service ${pkgdir}/usr/lib/systemd/system/qrystal-coord-server.service
-	systemd daemon-reload
+	systemctl daemon-reload
 
 uninstall-coord:
 	rm ${pkgdir}/usr/bin/qrystal-coord-server
@@ -47,7 +47,7 @@ install-device: device-client device-dns
 	install ${src}/config/device-client.service ${pkgdir}/usr/lib/systemd/system/qrystal-device-client.service
 	install ${src}/config/device-dns.service ${pkgdir}/usr/lib/systemd/system/qrystal-device-dns.service
 	install ${src}/config/device-dns.socket ${pkgdir}/usr/lib/systemd/system/qrystal-device-dns.socket
-	systemd daemon-reload
+	systemctl daemon-reload
 
 uninstall-device:
 	rm ${pkgdir}/usr/bin/qrystal-device-client
