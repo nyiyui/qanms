@@ -19,7 +19,7 @@ install-coord: coord-server
 	mkdir -p ${pkgdir}/etc/qrystal-coord/
 	chown root:root ${pkgdir}/etc/qrystal-coord/
 	chmod 755 ${pkgdir}/etc/qrystal-coord/
-	install -m 640 -o root -g root ${src}/config/coord-serevr-config.json ${pkgdir}/etc/qrystal-coord/config.json
+	install -m 640 -o root -g root ${src}/config/coord-server-config.json ${pkgdir}/etc/qrystal-coord/config.json
 	#
 	mkdir -p ${pkgdir}/usr/lib/systemd/system
 	install ${src}/config/coord-server.service ${pkgdir}/usr/lib/systemd/system/qrystal-coord-server.service
