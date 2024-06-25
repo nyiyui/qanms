@@ -1,0 +1,11 @@
+[Unit]
+Description="Qrystal on-device DNS server"
+Documentation="https://nyiyui.ca/qrystal"
+
+[Socket]
+ListenStream=/run/qrystal-device-dns.sock
+SocketUser=qrystal-deviec
+SocketMode=0600
+
+[Install]
+WantedBy=sockets.target

@@ -1,0 +1,23 @@
+[Unit]
+Description="Qrystal on-device client"
+Documentation="https://nyiyui.ca/qrystal"
+
+[Service]
+ExecStart=qrystal-device-client --config=/etc/qrystal-device/client-config.json --dns-socket=/run/qrystal-device-dns.sock
+Type=notify
+NotifyAccess=all
+StateDirectory=qrystal-device-client
+CapabilityBoundingSet=CAP_NET_ADMIN
+ReadWritePaths=/run/qrystal-device-dns.sock
+
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+RestrictNamespaces=yes
+PrivateMounts=yes
+
+[Install]
+WantedBy=multi-user.target

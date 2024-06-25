@@ -134,7 +134,6 @@ args@{ self, system, nixpkgsFor, libFor, nixosLibFor, ldflags, packages, ... }:
         NoNewPrivileges = true;
         ProtectSystem = "strict";
         ProtectHome = true;
-        ProtectDevices = true;
         ProtectKernelTunables = true;
         ProtectKernelModules = true;
         ProtectControlGroups = true;
@@ -161,7 +160,7 @@ args@{ self, system, nixpkgsFor, libFor, nixosLibFor, ldflags, packages, ... }:
       (mkIf deviceCfg.enable {
         users.users.qrystal-device = {
           isSystemUser = true;
-          description = "Qrystal on-device client and DNS server";
+          description = "Qrystal on-device services";
         };
         systemd.services.qrystal-device-dns = {
           script = ''
@@ -179,6 +178,8 @@ args@{ self, system, nixpkgsFor, libFor, nixosLibFor, ldflags, packages, ... }:
           wantedBy = [ "sockets.target" ];
           socketConfig = {
             ListenStream = rpcSocketPath;
+            SocketUser = "qrystal-device";
+            SocketMode = "0600";
           };
         };
         systemd.services.qrystal-device-client = {
@@ -194,6 +195,7 @@ args@{ self, system, nixpkgsFor, libFor, nixosLibFor, ldflags, packages, ... }:
               "CAP_NET_ADMIN"
             ];
             ReadWritePaths = [ rpcSocketPath ];
+            User = "qrystal-device";
           } // baseServiceConfig;
         };
       })

@@ -14,6 +14,7 @@ import (
 
 type Config struct {
 	Parents []dns.Parent
+	Address string
 }
 
 func main() {
@@ -36,6 +37,9 @@ func main() {
 	err = json.Unmarshal(configData, &config)
 	if err != nil {
 		zap.S().Fatalf("parsing config file failed: %s", err)
+	}
+	if addr == "" {
+		addr = config.Address
 	}
 	data, err := json.Marshal(config)
 	if err != nil {
