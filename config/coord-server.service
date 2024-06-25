@@ -1,0 +1,22 @@
+[Unit]
+Description="Qrystal coordination server"
+Documentation="https://nyiyui.ca/qrystal"
+
+[Service]
+ExecStart=qrystal-coord-server --config=/etc/qrystal-coord/config.json --dns-socket=/run/qrystal-device-dns.sock
+Type=notify
+NotifyAccess=all
+DynamicUser=yes
+ReadOnlyPaths=/etc/qrystal-coord/config.json
+
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+RestrictNamespaces=yes
+PrivateMounts=yes
+
+[Install]
+WantedBy=multi-user.target

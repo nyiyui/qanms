@@ -13,6 +13,23 @@ device-dns:
 gen-keys:
 	go build ${flags} ${src}/cmd/gen-keys
 
+install-coord: coord-server
+	install -m 755 -o root -g root coord-server ${pkgdir}/usr/bin/qrystal-coord-server
+	#
+	mkdir -p ${pkgdir}/etc/qrystal-coord/
+	chown root:root ${pkgdir}/etc/qrystal-coord/
+	chmod 755 ${pkgdir}/etc/qrystal-coord/
+	install -m 640 -o root -g qrystal-coord ${src}/config/coord-serevr-config.json ${pkgdir}/etc/qrystal-coord/config.json
+	#
+	mkdir -p ${pkgdir}/usr/lib/systemd/system
+	install ${src}/config/coord-server.service ${pkgdir}/usr/lib/systemd/system/qrystal-coord-server.service
+	systemd daemon-reload
+
+uninstall-coord:
+	rm ${pkgdir}/usr/bin/qrystal-coord-server
+	rm ${pkgdir}/etc/qrystal-coord
+	rm ${pkgdir}/usr/lib/systemd/system/qrystal-coord-server.service
+
 install-device: device-client device-dns
 	install -m 755 -o root -g root device-client ${pkgdir}/usr/bin/qrystal-device-client
 	install -m 755 -o root -g root device-dns ${pkgdir}/usr/bin/qrystal-device-dns
