@@ -17,6 +17,7 @@ import (
 	"github.com/nyiyui/qrystal/goal"
 	"github.com/nyiyui/qrystal/util"
 	"go.uber.org/zap"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
 type Config struct {
@@ -29,6 +30,7 @@ type ClientConfig struct {
 	Network         string
 	Device          string
 	PrivateKey      goal.Key
+	PrivateKeyPath  string
 	MinimumInterval goal.Duration
 }
 
@@ -82,6 +84,21 @@ func main() {
 	err = json.Unmarshal(configData, &config)
 	if err != nil {
 		zap.S().Fatalf("parsing config file failed: %s", err)
+	}
+	for key, cc := range config.Clients {
+		if cc.PrivateKeyPath == "" {
+			continue
+		}
+		data, err := os.ReadFile(cc.PrivateKeyPath)
+		if err != nil {
+			zap.S().Fatalf("parsing config file failed: client %s: reading private key path: %s", key, err)
+		}
+		privateKey, err := wgtypes.ParseKey(string(data))
+		if err != nil {
+			zap.S().Fatalf("parsing config file failed: client %s: parsing private key path: %s", key, err)
+		}
+		cc.PrivateKey = goal.Key(privateKey)
+		config.Clients[key] = cc
 	}
 	data, err := json.Marshal(config)
 	if err != nil {

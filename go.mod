@@ -3,6 +3,7 @@ module github.com/nyiyui/qrystal
 go 1.22
 
 require (
+	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/google/go-cmp v0.6.0
 	github.com/miekg/dns v1.1.61
 	github.com/vishvananda/netlink v1.1.0

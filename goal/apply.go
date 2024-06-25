@@ -149,9 +149,13 @@ func ApplyInterfaceDiff(a, b Interface, id InterfaceDiff, client *wgctrl.Client,
 	}
 	cfg := wgtypes.Config{
 		PrivateKey:   (*wgtypes.Key)(&b.PrivateKey),
-		ListenPort:   &b.ListenPort,
 		ReplacePeers: true,
 		Peers:        peers,
+	}
+	if b.ListenPort == 0 {
+		cfg.ListenPort = nil
+	} else {
+		cfg.ListenPort = &b.ListenPort
 	}
 	data, _ = json.MarshalIndent(cfg, "  ", "  ")
 	zap.S().Debugf("wg interface configuration:\n%s", data)

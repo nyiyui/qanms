@@ -1,7 +1,6 @@
 package goal
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -46,12 +45,12 @@ func (k *Key) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	k2, err := base64.StdEncoding.DecodeString(s)
+	if s == "" {
+		return nil
+	}
+	k2, err := wgtypes.ParseKey(s)
 	if err != nil {
 		return err
-	}
-	if len(k2) != len(k) {
-		return fmt.Errorf("key length must be %d but was %d", len(k), len(k2))
 	}
 	*k = Key(k2)
 	return nil

@@ -74,33 +74,22 @@
               ];
 
               #vendorHash = pkgs.lib.fakeHash;
-              vendorHash = "sha256-jZy0Woqnj7QDL9jRHKEPdjgmPBWNpqXt8clr+gCklfQ=";
+              vendorHash = "sha256-dwSvxFceSNvoGqbSjAXmIFElVMhgK4od0V2ij/GYje0=";
             };
           in
           {
-            runner = pkgs.buildGoModule (
+            coord-server = pkgs.buildGoModule (
               common
               // {
-                pname = "runner";
-                subPackages = [
-                  "cmd/runner"
-                  "cmd/runner-mio"
-                  "cmd/runner-node"
-                  "cmd/runner-hokuto"
-                ];
-                ldflags = (ldflags pkgs) ++ [ "-X github.com/nyiyui/qrystal/runner.NodeUser=qrystal-node" ];
-                postInstall = ''
-                  mkdir $out/lib
-                  cp $src/mio/dev-add.sh $out/lib
-                  cp $src/mio/dev-remove.sh $out/lib
-                '';
+                pname = "coord-server";
+                subPackages = [ "cmd/coord-server" ];
               }
             );
-            cs = pkgs.buildGoModule (
+            device = pkgs.buildGoModule (
               common
               // {
-                pname = "cs";
-                subPackages = [ "cmd/cs" ];
+                pname = "device-client";
+                subPackages = [ "cmd/device-client" "cmd/device-dns" ];
               }
             );
             etc = pkgs.buildGoModule (
@@ -127,6 +116,9 @@
             nixosLibFor
             ldflags
             ;
+        };
+        nixosModules = (import ./modules.nix) {
+          inherit self system nixpkgsFor libFor nixosLibFor ldflags packages;
         };
       }
     );

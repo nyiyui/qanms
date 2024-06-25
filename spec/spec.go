@@ -2,10 +2,14 @@ package spec
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 	"slices"
 
 	"github.com/nyiyui/qrystal/goal"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
 type Spec struct {
@@ -126,7 +130,6 @@ func (n Network) CensorForDevice(censorFor string) NetworkCensored {
 
 type NetworkDevice struct {
 	NetworkDeviceCensored
-
 	AccessControl
 }
 
@@ -135,6 +138,18 @@ func (nd NetworkDevice) Clone() NetworkDevice {
 		NetworkDeviceCensored: nd.NetworkDeviceCensored.Clone(),
 		AccessControl:         nd.AccessControl.Clone(),
 	}
+}
+
+func (nd *NetworkDevice) UnmarshalJSON(data []byte) error {
+	err := nd.NetworkDeviceCensored.UnmarshalJSON(data)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal(data, &nd.AccessControl)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type NetworkDeviceCensored struct {
@@ -153,10 +168,11 @@ type NetworkDeviceCensored struct {
 	// EndpointChosenIndex is the index of the chosen endpoint.
 	// This value should always be zero on the server.
 	EndpointChosenIndex int
-	// Addresses is a list of IP networks that the peer represents.
+	// Addresses is a list of IP networks that this peer represents.
 	Addresses []goal.IPNet
 
 	// ListenPort is the port that WireGuard will listen on.
+	// Set to 0 to not specify a port.
 	// This can be set by this peer.
 	ListenPort int
 	// This can be set by this peer.
@@ -167,6 +183,44 @@ type NetworkDeviceCensored struct {
 	// Set to 0 to disable persistent keepalive.
 	// This can be set by this peer.
 	PersistentKeepalive goal.Duration
+}
+
+type networkDeviceCensoredJSON struct {
+	Name                string
+	Endpoints           []string
+	Addresses           []goal.IPNet
+	ListenPort          int
+	PublicKey           goal.Key
+	PresharedKey        *goal.Key
+	PresharedKeyPath    string
+	PersistentKeepalive goal.Duration
+}
+
+func (ndc *NetworkDeviceCensored) UnmarshalJSON(data []byte) error {
+	var ndcj networkDeviceCensoredJSON
+	err := json.Unmarshal(data, &ndcj)
+	if err != nil {
+		return err
+	}
+	if ndcj.PresharedKeyPath != "" {
+		data, err := os.ReadFile(ndcj.PresharedKeyPath)
+		if err != nil {
+			return fmt.Errorf("reading PresharedKeyPath: %w", err)
+		}
+		presharedKey, err := wgtypes.ParseKey(string(data))
+		if err != nil {
+			return fmt.Errorf("parsing PresharedKeyPath: %w", err)
+		}
+		ndcj.PresharedKey = (*goal.Key)(&presharedKey)
+	}
+	ndc.Name = ndcj.Name
+	ndc.Endpoints = ndcj.Endpoints
+	ndc.Addresses = ndcj.Addresses
+	ndc.ListenPort = ndcj.ListenPort
+	ndc.PublicKey = ndcj.PublicKey
+	ndc.PresharedKey = ndcj.PresharedKey
+	ndc.PersistentKeepalive = ndcj.PersistentKeepalive
+	return nil
 }
 
 func ipNetEqual(a, b goal.IPNet) bool {

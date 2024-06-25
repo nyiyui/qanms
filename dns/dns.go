@@ -89,6 +89,12 @@ func (s *Server) ListenRPC(socketPath string) error {
 	return nil
 }
 
+func (s *Server) ListenRPCListener(lis net.Listener) {
+	rs := rpc.NewServer()
+	rs.Register(s.r)
+	go rs.Accept(lis)
+}
+
 func (s *Server) handle(w dns.ResponseWriter, r *dns.Msg) {
 	m := new(dns.Msg)
 	m.SetReply(r)

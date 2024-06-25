@@ -22,7 +22,9 @@ type Config struct {
 
 func main() {
 	var configPath string
+	var addr string
 	flag.StringVar(&configPath, "config", "", "config file path")
+	flag.StringVar(&addr, "addr", "", "bind address")
 	flag.Parse()
 	util.SetupLog()
 	defer util.S.Sync()
@@ -31,6 +33,9 @@ func main() {
 	c, err := loadConfig(configPath)
 	if err != nil {
 		zap.S().Fatalf("loading config failed: %s", err)
+	}
+	if c.Addr != "" {
+		addr = c.Addr
 	}
 	tokens, err := convertTokens(c.Tokens)
 	if err != nil {
@@ -41,7 +46,7 @@ func main() {
 	if err != nil {
 		zap.S().Infof("notify: %s", err)
 	}
-	zap.S().Fatalf("listen and serve failed: %s", http.ListenAndServe(c.Addr, s))
+	zap.S().Fatalf("listen and serve failed: %s", http.ListenAndServe(addr, s))
 }
 
 func loadConfig(path string) (Config, error) {
