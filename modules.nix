@@ -69,7 +69,7 @@ args@{ self, system, nixpkgsFor, libFor, nixosLibFor, ldflags, packages, ... }:
       options.Device = mkOption { type = str; };
       options.PrivateKeyPath = mkOption { type = nullOr str; default = null; description = "Path to Base64 privateKey for this WireGuard interface. Leave blank to autogenerate."; };
       options.MinimumInterval = mkOption { type = str; default = "2m"; description = "minimum interval to poll for updates to coordination server."; };
-      options.CertPath = mkOption { type = str; default = ""; description = "TLS certificate to use with server."; };
+      options.CertPath = mkOption { type = path; default = ""; description = "TLS certificate to use with server."; };
     };
     dnsParent = submodule {
       options.Suffix = mkOption { type = str; description = "DNS suffix. Precede with a dot if this suffix does not specify a network and device."; };
