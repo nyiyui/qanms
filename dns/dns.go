@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/rpc"
+	"os"
 	"slices"
 	"strings"
 
@@ -78,10 +80,16 @@ func (s *Server) ListenDNS(addr string) error {
 	return nil
 }
 
-func (s *Server) ListenRPC(socketPath string) error {
+func (s *Server) ListenRPC(socketPath string, socketMode int) error {
 	lis, err := net.Listen("unix", socketPath)
 	if err != nil {
 		return err
+	}
+	if socketMode != 0 {
+		err = os.Chmod(socketPath, fs.FileMode(socketMode))
+		if err != nil {
+			return fmt.Errorf("chmod: %s", err)
+		}
 	}
 	rs := rpc.NewServer()
 	rs.Register(s.r)

@@ -26,7 +26,7 @@ type Client struct {
 	Machine       goal.Machine
 	wgClient      *wgctrl.Client
 	netlinkHandle *netlink.Handle
-	dns           *dns.RPCClient
+	dns           dns.Client
 	dnsLock       sync.Mutex
 
 	spec       spec.SpecCensored
@@ -36,7 +36,7 @@ type Client struct {
 	privateKey goal.Key
 }
 
-func NewClient(baseURL string, token util.Token, network, device string, privateKey goal.Key) (*Client, error) {
+func NewClient(httpClient *http.Client, baseURL string, token util.Token, network, device string, privateKey goal.Key) (*Client, error) {
 	baseURL2, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, err
@@ -49,8 +49,11 @@ func NewClient(baseURL string, token util.Token, network, device string, private
 	if err != nil {
 		return nil, err
 	}
+	if httpClient == nil {
+		httpClient = new(http.Client)
+	}
 	return &Client{
-		client:        new(http.Client),
+		client:        httpClient,
 		baseURL:       baseURL2,
 		wgClient:      wgClient,
 		netlinkHandle: netlinkHandle,
@@ -61,7 +64,7 @@ func NewClient(baseURL string, token util.Token, network, device string, private
 	}, nil
 }
 
-func (c *Client) SetDNSClient(client *dns.RPCClient) {
+func (c *Client) SetDNSClient(client dns.Client) {
 	c.dnsLock.Lock()
 	defer c.dnsLock.Unlock()
 	c.dns = client

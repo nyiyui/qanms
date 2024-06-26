@@ -12,20 +12,17 @@ import (
 	"go.uber.org/zap"
 )
 
-type Config struct {
-	Parents []dns.Parent
-	Address string
-}
-
 func main() {
 	util.SetupLog()
 
 	var configPath string
 	var socketPath string
+	var socketMode int
 	var useSystemdSocketActivation bool
 	var addr string
 	flag.StringVar(&configPath, "config", "", "path to config file")
 	flag.StringVar(&socketPath, "rpc-listen", "", "socket to listen on for RPC. NOTE that sockets must be made in a private parent directory, as anyone with access to this socket has access to a DNS server running as root.")
+	flag.IntVar(&socketMode, "rpc-chmod", 0600, "mode for rpc-listen socket.")
 	flag.BoolVar(&useSystemdSocketActivation, "rpc-systemd", false, "use systemd socket activation for RPC listening.")
 	flag.StringVar(&addr, "dns-listen", "", "socket to listen on for DNS")
 	flag.Parse()
@@ -33,7 +30,7 @@ func main() {
 	if err != nil {
 		zap.S().Fatalf("reading config file failed: %s", err)
 	}
-	var config Config
+	var config dns.Config
 	err = json.Unmarshal(configData, &config)
 	if err != nil {
 		zap.S().Fatalf("parsing config file failed: %s", err)
@@ -62,7 +59,7 @@ func main() {
 		s.ListenRPCListener(listeners[0])
 		zap.S().Info("listening for RPC on socket activation.")
 	} else {
-		err = s.ListenRPC(socketPath)
+		err = s.ListenRPC(socketPath, socketMode)
 		if err != nil {
 			zap.S().Fatalf("failed to listen: %s", err)
 		}

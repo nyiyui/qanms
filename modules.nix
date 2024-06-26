@@ -64,16 +64,17 @@ args@{ self, system, nixpkgsFor, libFor, nixosLibFor, ldflags, packages, ... }:
     deviceType = addCheck deviceTypeRaw (d: (d.AccessAll == true) != ((length d.AccessControl) > 0));
     clientConfig = submodule {
       options.BaseURL = mkOption { type = str; description = "Qrystal coordination server base URL."; };
-      options.Token = mkOption { type = tokenType; description = "Token to use with coordination server."; };
+      options.TokenPath = mkOption { type = path; description = "Token to use with coordination server."; };
       options.Network = mkOption { type = networkName; };
       options.Device = mkOption { type = str; };
       options.PrivateKeyPath = mkOption { type = nullOr str; default = null; description = "Path to Base64 privateKey for this WireGuard interface. Leave blank to autogenerate."; };
-      options.minimumInterval = mkOption { type = str; default = "2m"; description = "minimum interval to poll for updates to coordination server."; };
+      options.MinimumInterval = mkOption { type = str; default = "2m"; description = "minimum interval to poll for updates to coordination server."; };
+      options.CertPath = mkOption { type = str; default = ""; description = "TLS certificate to use with server."; };
     };
     dnsParent = submodule {
       options.Suffix = mkOption { type = str; description = "DNS suffix. Precede with a dot if this suffix does not specify a network and device."; };
-      options.Network = mkOption { type = networkName; description = "Preset network for this parent."; };
-      options.Device = mkOption { type = str; description = "Preset device for this parent."; };
+      options.Network = mkOption { type = networkName; default = ""; description = "Preset network for this parent."; };
+      options.Device = mkOption { type = str; default = ""; description = "Preset device for this parent."; };
     };
   in {
     options.services.qrystal-coord-server = {
@@ -85,6 +86,8 @@ args@{ self, system, nixpkgsFor, libFor, nixosLibFor, ldflags, packages, ... }:
           options.port = mkOption { type = port; default = 39390; };
         };
       };
+      certPath = mkOption { type = nullOr path; default = null; description = "TLS certificate for HTTPS server. Using this enables HTTPS and disables HTTP."; };
+      keyPath = mkOption { type = nullOr path; default = null; description = "TLS private key for HTTPS server. Using this enables HTTPS and disables HTTP."; };
       config = mkOption {
         type = submodule {
           options = {
@@ -107,7 +110,7 @@ args@{ self, system, nixpkgsFor, libFor, nixosLibFor, ldflags, packages, ... }:
       config = mkOption {
         type = submodule {
           options = {
-            clients = mkOption {
+            Clients = mkOption {
               type = attrsOf clientConfig;
               default = [];
             };
@@ -120,6 +123,11 @@ args@{ self, system, nixpkgsFor, libFor, nixosLibFor, ldflags, packages, ... }:
                   default = [
                     { Suffix = ".qrystal.internal"; }
                   ];
+                };
+                options.Address = mkOption {
+                  type = str;
+                  description = "Address DNS server listens on.";
+                  default = "127.0.0.39:53";
                 };
               };
               default.enable = false;
@@ -140,7 +148,6 @@ args@{ self, system, nixpkgsFor, libFor, nixosLibFor, ldflags, packages, ... }:
         RestrictNamespaces = true;
         PrivateMounts = true;
       };
-      rpcSocketPath = "/run/qrystal-device-dns.sock";
     in mkMerge [
       (mkIf coordCfg.enable {
         systemd.services.qrystal-coord-server = {
@@ -152,51 +159,45 @@ args@{ self, system, nixpkgsFor, libFor, nixosLibFor, ldflags, packages, ... }:
             NotifyAccess = "all";
             DynamicUser = true;
           } // baseServiceConfig;
+          wantedBy = [ "multi-user.target" ];
         };
       })
       (mkIf (coordCfg.enable && coordCfg.openFirewall) {
         networking.firewall.allowedTCPPorts = [ coordCfg.bind.port ];
       })
       (mkIf deviceCfg.enable {
+        users.groups.qrystal-device = {};
         users.users.qrystal-device = {
           isSystemUser = true;
           description = "Qrystal on-device services";
+          group = "qrystal-device";
         };
-        systemd.services.qrystal-device-dns = {
-          script = ''
-            ${packages.device}/bin/device-dns --config=${pkgs.writeText "qrystal-device-dns-config.json" (builtins.toJSON deviceCfg.config.dns)} --rpc-systemd=true --dns-listen=${dnsAddress}
-          '';
-          serviceConfig = {
-            Type = "notify";
-            NotifyAccess = "all";
-            CapabilityBoundingSet = [
-              "CAP_NET_BIND_SERVICE" # well it's a DNS server, most likely the port will be 53…
-            ];
-          } // baseServiceConfig;
-        };
-        systemd.sockets.qrystal-device-dns = {
-          wantedBy = [ "sockets.target" ];
-          socketConfig = {
-            ListenStream = rpcSocketPath;
-            SocketUser = "qrystal-device";
-            SocketMode = "0600";
-          };
+        security.wrappers."qrystal-device-client" = {
+          source = "${packages.device}/bin/device-client";
+          #permissions = "u+rx";
+          owner = "root";
+          group = "root";
+          capabilities = "cap_net_admin+pie cap_net_bind_service+pie"; # TODO: not sure if iep is the correct one here
         };
         systemd.services.qrystal-device-client = {
-          script = ''
-            ${packages.device}/bin/device-client --config=${pkgs.writeText "qrystal-device-client-config.json" (builtins.toJSON deviceCfg.config)} --dns-socket=${dnsRPCSocket}
-          '';
           requires = [ "network.target" ];
           serviceConfig = {
+            #ExecStart = "${config.security.wrapperDir}/qrystal-device-client --config=${pkgs.writeText "qrystal-device-client-config.json" (builtins.toJSON deviceCfg.config)} --dns-config=${pkgs.writeText "qrystal-device-dns-config.json" (builtins.toJSON deviceCfg.config.dns)} --dns-self=true";
+            ExecStart = "${packages.device}/bin/device-client --config=${pkgs.writeText "qrystal-device-client-config.json" (builtins.toJSON deviceCfg.config)} --dns-config=${pkgs.writeText "qrystal-device-dns-config.json" (builtins.toJSON deviceCfg.config.dns)} --dns-self=true";
             Type = "notify";
             NotifyAccess = "all";
             StateDirectory = [ "qrystal-device-client" ];
-            CapabilityBoundingSet = [
+            AmbientCapabilities = [
               "CAP_NET_ADMIN"
+              "CAP_NET_BIND_SERVICE"
             ];
-            ReadWritePaths = [ rpcSocketPath ];
+            #CapabilityBoundingSet = [
+            #  "CAP_NET_ADMIN"
+            #  "CAP_NET_BIND_SERVICE"
+            #];
             User = "qrystal-device";
           } // baseServiceConfig;
+          wantedBy = [ "multi-user.target" ];
         };
       })
     ];

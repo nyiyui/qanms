@@ -15,16 +15,22 @@ import (
 )
 
 type Config struct {
-	Spec   spec.Spec
-	Tokens map[string]coord.TokenInfo
-	Addr   string
+	Spec     spec.Spec
+	Tokens   map[string]coord.TokenInfo
+	Addr     string
+	CertPath string
+	KeyPath  string
 }
 
 func main() {
 	var configPath string
 	var addr string
-	flag.StringVar(&configPath, "config", "", "config file path")
-	flag.StringVar(&addr, "addr", "", "bind address")
+	var certPath string
+	var keyPath string
+	flag.StringVar(&configPath, "config", "", "Config file path.")
+	flag.StringVar(&addr, "addr", "", "Bind address. Overridden by config file if present.")
+	flag.StringVar(&certPath, "cert", "", "Certificate for HTTPS server. Supplying this will enable HTTPS and disable HTTP. Overridden by config file if present.")
+	flag.StringVar(&keyPath, "key", "", "Key for HTTPS server. Supplying this will enable HTTPS and disable HTTP. Overridden by config file if present.")
 	flag.Parse()
 	util.SetupLog()
 	defer util.S.Sync()
@@ -37,16 +43,33 @@ func main() {
 	if c.Addr != "" {
 		addr = c.Addr
 	}
+	if c.CertPath != "" {
+		certPath = c.CertPath
+	}
+	if c.KeyPath != "" {
+		keyPath = c.KeyPath
+	}
+	if (certPath == "") != (keyPath == "") {
+		zap.S().Fatalf("both or none of certPath and keyPath must be provided")
+	}
 	tokens, err := convertTokens(c.Tokens)
 	if err != nil {
 		zap.S().Fatalf("loading config failed: %s", err)
 	}
 	s := coord.NewServer(c.Spec, tokens)
-	err = util.Notify("READY=1\nSTATUS=serving…")
+	if certPath != "" && keyPath != "" {
+		err = util.Notify("READY=1\nSTATUS=serving HTTPS…")
+	} else {
+		err = util.Notify("READY=1\nSTATUS=serving HTTP…")
+	}
 	if err != nil {
 		zap.S().Infof("notify: %s", err)
 	}
-	zap.S().Fatalf("listen and serve failed: %s", http.ListenAndServe(addr, s))
+	if certPath != "" && keyPath != "" {
+		zap.S().Fatalf("listen and serve failed: %s", http.ListenAndServeTLS(addr, certPath, keyPath, s))
+	} else {
+		zap.S().Fatalf("listen and serve failed: %s", http.ListenAndServe(addr, s))
+	}
 }
 
 func loadConfig(path string) (Config, error) {

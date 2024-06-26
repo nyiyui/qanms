@@ -21,6 +21,24 @@ func (r *RPCServer) UpdateSpec(spec spec.SpecCensored, alwaysNil *bool) error {
 	return nil
 }
 
+type Client interface {
+	// UpdateSpec sends an updated spec to the DNS server.
+	UpdateSpec(spec.SpecCensored) error
+}
+
+type DirectClient struct {
+	r *RPCServer
+}
+
+func NewDirectClient(s *Server) *DirectClient {
+	return &DirectClient{r: s.r}
+}
+
+// UpdateSpec sends an updated spec to the DNS server.
+func (d *DirectClient) UpdateSpec(spec spec.SpecCensored) error {
+	return d.r.UpdateSpec(spec, new(bool))
+}
+
 // RPCClient is the client for RPCServer.
 type RPCClient struct {
 	c *rpc.Client

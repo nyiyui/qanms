@@ -630,37 +630,6 @@ in
       client2PrivateKey = "AFiQ0ipcWrEluvCmaEoQ7PQeurOo3bVRXANAOXYny0s=";
       client2PublicKey = "J4nZeURCVbUmo5w/IBnaCU9M5tOMqGRZnPB2vAji4hE=";
       client1TokenHash = "qrystalcth_30e72874f2598c1ad8020507182a4f57a7304806947b677b69c7d76a88003bc6";
-      client1Config = pkgs.writeText "client1config.json" (
-        builtins.toJSON {
-          Clients = {
-            "server" = {
-              BaseURL = "http://server:${builtins.toString serverPort}";
-              Token = "qrystalct_ZXcX7NyjY2aqiy5bb7Oe952QSCsVxzh2FU2ahvaPiHZPJaWeN+Xi59HHvqTDT0Tyy7IOhzC9Uc3Nn7dQ+8GhbQ==";
-              Network = "wiring";
-              Device = "client1";
-              PrivateKey = client1PrivateKey;
-              MinimumInterval = "20s";
-            };
-          };
-        }
-      );
-      client1DNSConfig = pkgs.writeText "client1config.json" (
-        builtins.toJSON {
-          Parents = [
-            { Suffix = ".qrystal.internal"; }
-            {
-              Suffix = "client1.nyiyui.ca";
-              Network = "wiring";
-              Device = "client1";
-            }
-            {
-              Suffix = "client2.nyiyui.ca";
-              Network = "wiring";
-              Device = "client2";
-            }
-          ];
-        }
-      );
       tokens = {
         ${client1TokenHash} = {
           Identities = [
@@ -713,52 +682,34 @@ in
           };
         };
       nodes.client1 =
-        { pkgs, ... }:
-        let
-          dnsRPCSocket = "/run/qrystal-device-dns.sock"; # NOTE that in a production environment, DNS RPC sockets must be in a private directory. (No authn/authz is performed by device-dns.
-          dnsAddress = "127.0.0.39:53";
-        in
-        {
+        { pkgs, ... }:        {
           # wg peer setup using test-device
-          imports = [ base ];
-          systemd.services.qrystal-device-dns = {
-            script = ''
-              QRYSTAL_LOGGING_CONFIG=development ${etc}/bin/device-dns --config=${client1DNSConfig} --rpc-listen=${dnsRPCSocket} --dns-listen=${dnsAddress}
-            '';
-            serviceConfig = {
-              Type = "notify";
-              NotifyAccess = "all";
-              PrivateTmp = true;
-              NoNewPrivileges = true;
-              ProtectSystem = "strict";
-              ProtectHome = true;
-              ProtectDevices = true;
-              ProtectKernelTunables = true;
-              ProtectKernelModules = true;
-              ProtectControlGroups = true;
-              RestrictNamespaces = true;
-              PrivateMounts = true;
+          imports = [ base module ];
+          services.qrystal-device-client = {
+            enable = true;
+            config.Clients.server = {
+              BaseURL = "http://server:${builtins.toString serverPort}";
+              TokenPath = "${pkgs.writeText "client1Token" "qrystalct_ZXcX7NyjY2aqiy5bb7Oe952QSCsVxzh2FU2ahvaPiHZPJaWeN+Xi59HHvqTDT0Tyy7IOhzC9Uc3Nn7dQ+8GhbQ=="}";
+              Network = "wiring";
+              Device = "client1";
+              PrivateKeyPath = "${pkgs.writeText "client1PublicKey" client1PrivateKey}";
+              MinimumInterval = "20s";
             };
-          };
-          systemd.services.qrystal-device-client = {
-            script = ''
-              QRYSTAL_LOGGING_CONFIG=development ${etc}/bin/device-client --config=${client1Config} --dns-socket=${dnsRPCSocket}
-            '';
-            serviceConfig = {
-              Type = "notify";
-              NotifyAccess = "all";
-              StateDirectory = [ "qrystal-device-client" ];
-              PrivateTmp = true;
-              NoNewPrivileges = true;
-              ProtectSystem = "strict";
-              ProtectHome = true;
-              ProtectDevices = true;
-              ProtectKernelTunables = true;
-              ProtectKernelModules = true;
-              ProtectControlGroups = true;
-              RestrictNamespaces = true;
-              PrivateMounts = true;
-            };
+            config.dns.enable = true;
+            config.dns.Parents = [
+              { Suffix = ".qrystal.internal"; }
+              {
+                Suffix = "client1.nyiyui.ca";
+                Network = "wiring";
+                Device = "client1";
+              }
+              {
+                Suffix = "client2.nyiyui.ca";
+                Network = "wiring";
+                Device = "client2";
+              }
+            ];
+            config.dns.Address = "127.0.0.39:53";
           };
         };
       nodes.client2 =
@@ -786,11 +737,9 @@ in
         { ... }:
         ''
           start_all()
-          server.systemctl("start qrystal-coord-server.service")
+          server.wait_until_succeeds("systemctl start qrystal-coord-server.service")
           server.wait_until_succeeds("systemctl status qrystal-coord-server.service")
-          client1.systemctl("start qrystal-device-dns.service")
-          client1.wait_until_succeeds("systemctl status qrystal-device-dns.service")
-          client1.systemctl("start qrystal-device-client.service")
+          client1.wait_until_succeeds("systemctl start qrystal-device-client.service")
           client1.wait_until_succeeds("systemctl status qrystal-device-client.service")
           server.succeed("systemctl status qrystal-coord-server.service")
           client1.wait_until_succeeds("ping -c 2 10.10.0.1")

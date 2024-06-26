@@ -38,7 +38,7 @@ func main() {
 	}
 	zap.S().Info("parsed configuration.")
 
-	c, err := device.NewClient(config.BaseURL, config.Token, config.Network, config.Device, config.PrivateKey)
+	c, err := device.NewClient(nil, config.BaseURL, config.Token, config.Network, config.Device, config.PrivateKey)
 	if err != nil {
 		panic(err)
 	}
