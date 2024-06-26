@@ -1,6 +1,12 @@
 src = .
 flags = -race -tags sdnotify
 
+clean:
+	rm coord-server
+	rm device-client
+	rm device-dns
+	rm gen-keys
+
 coord-server:
 	go build ${flags} ${src}/cmd/coord-server
 
@@ -56,3 +62,5 @@ uninstall-device:
 	rm ${pkgdir}/usr/lib/systemd/system/qrystal-device-client.service
 	rm ${pkgdir}/usr/lib/systemd/system/qrystal-device-dns.service
 	rm ${pkgdir}/usr/lib/systemd/system/qrystal-device-dns.socket
+
+.PHONY: clean install-coord uninstall-coord install-device uninstall-device
