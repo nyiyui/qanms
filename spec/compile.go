@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/nyiyui/qrystal/goal"
+	"go.uber.org/zap"
 )
 
 func (sc SpecCensored) CompileMachine(name string, ignoreIncomplete bool) (goal.Machine, error) {
@@ -22,6 +23,7 @@ func (sc SpecCensored) CompileMachine(name string, ignoreIncomplete bool) (goal.
 			}
 			if !snd.EndpointChosen {
 				if ignoreIncomplete {
+					zap.S().Debugf("%s/%s does not have a chosen endpoint, ignore.", sn.Name, snd.Name)
 					continue
 				} else {
 					return goal.Machine{}, fmt.Errorf("%s/%s does not have a chosen endpoint", sn.Name, snd.Name)
@@ -29,6 +31,7 @@ func (sc SpecCensored) CompileMachine(name string, ignoreIncomplete bool) (goal.
 			}
 			if snd.PublicKey == (goal.Key{}) {
 				if ignoreIncomplete {
+					zap.S().Debugf("%s/%s has unset PublicKey, ignore.", sn.Name, snd.Name)
 					continue
 				} else {
 					return goal.Machine{}, fmt.Errorf("%s/%s has unset PublicKey", sn.Name, snd.Name)
