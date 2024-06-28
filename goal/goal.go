@@ -9,14 +9,18 @@ import (
 )
 
 type Machine struct {
-	Interfaces []Interface
+	Interfaces   []Interface
+	ForwardsIPv4 bool
+	ForwardsIPv6 bool
 }
 
 type MachineDiff struct {
-	InterfacesAdded   []Interface
-	InterfacesRemoved []Interface
-	InterfacesChanged []string
-	InterfaceNoChange bool
+	InterfacesAdded     []Interface
+	InterfacesRemoved   []Interface
+	InterfacesChanged   []string
+	InterfaceNoChange   bool
+	ForwardsIPv4Changed bool
+	ForwardsIPv6Changed bool
 }
 
 func DiffMachine(a, b *Machine) MachineDiff {
@@ -51,6 +55,9 @@ func DiffMachine(a, b *Machine) MachineDiff {
 			diff.InterfacesChanged = append(diff.InterfacesChanged, b.Interfaces[j].Name)
 		}
 	}
+
+	diff.ForwardsIPv4Changed = a.ForwardsIPv4 != b.ForwardsIPv4
+	diff.ForwardsIPv6Changed = a.ForwardsIPv6 != b.ForwardsIPv6
 
 	return diff
 }

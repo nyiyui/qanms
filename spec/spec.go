@@ -109,6 +109,17 @@ func (nc NetworkCensored) GetDeviceIndex(name string) (i int, ok bool) {
 	return i, i != -1
 }
 
+// GetForwardersFor returns a list of device names that can forward for the given device, and has a chosen forwarder and endpoint.
+func (nc NetworkCensored) GetForwardersFor(name string) []string {
+	forwarders := make([]string, 0)
+	for _, ndc := range nc.Devices {
+		if slices.Contains(ndc.ForwardsFor, name) && ndc.ForwarderAndEndpointChosen {
+			forwarders = append(forwarders, ndc.Name)
+		}
+	}
+	return forwarders
+}
+
 func (a NetworkCensored) Equal(b NetworkCensored) bool {
 	return a.Name == b.Name && slices.EqualFunc(a.Devices, b.Devices, func(a, b NetworkDeviceCensored) bool { return a.Equal(b) }) && a.CensoredFor == b.CensoredFor
 }
@@ -133,6 +144,10 @@ type NetworkDevice struct {
 	AccessControl
 }
 
+func (a NetworkDevice) Equal(b NetworkDevice) bool {
+	return a.NetworkDeviceCensored.Equal(b.NetworkDeviceCensored) && a.AccessControl.Equal(b.AccessControl)
+}
+
 func (nd NetworkDevice) Clone() NetworkDevice {
 	return NetworkDevice{
 		NetworkDeviceCensored: nd.NetworkDeviceCensored.Clone(),
@@ -154,20 +169,18 @@ func (nd *NetworkDevice) UnmarshalJSON(data []byte) error {
 
 type NetworkDeviceCensored struct {
 	Name string
-	// TODO: forwarding (keep this commented out for now)
-	// // Route represents how a packet reaches this peer.
-	// // Packets go through the peers listed (by name) in the slice.
-	// // A nil slice means that no forwarding occurs.
-	// // For example, {"A", "B"} means that a packet is forwarded to A to B to this peer.
-	// Route []string
 	// Endpoints is a unordered list of endpoints on which the peer is available on.
 	Endpoints []string
 	// EndpointChosen is whether the endpoint was chosen.
 	// This value should always be false on the server.
-	EndpointChosen bool
+	ForwarderAndEndpointChosen bool
+	UsesForwarder              bool
 	// EndpointChosenIndex is the index of the chosen endpoint.
 	// This value should always be zero on the server.
 	EndpointChosenIndex int
+	// ForwarderChosenIndex is the name of the chosen forwarder.
+	// This value should always be zero on the server.
+	ForwarderChosenIndex int
 	// Addresses is a list of IP networks that this peer represents.
 	Addresses []goal.IPNet
 
@@ -183,6 +196,11 @@ type NetworkDeviceCensored struct {
 	// Set to 0 to disable persistent keepalive.
 	// This can be set by this peer.
 	PersistentKeepalive goal.Duration
+	// TODO: forwarding (keep this commented out for now)
+	// ForwardsFor is the list of devices (in the same network) that this peer has access to, and can fowrard packets to.
+	// Note that IPv6 forwarding is not supported yet.
+	// This can be set by this peer.
+	ForwardsFor []string
 }
 
 type networkDeviceCensoredJSON struct {
@@ -228,17 +246,18 @@ func ipNetEqual(a, b goal.IPNet) bool {
 }
 
 func (a NetworkDeviceCensored) Equal(b NetworkDeviceCensored) bool {
-	return a.Name == b.Name && slices.Equal(a.Endpoints, b.Endpoints) && slices.EqualFunc(a.Addresses, b.Addresses, ipNetEqual) && a.ListenPort == b.ListenPort && a.PublicKey == b.PublicKey && (a.PresharedKey != nil && b.PresharedKey != nil && *a.PresharedKey == *b.PresharedKey || a.PresharedKey == nil && b.PresharedKey == nil) && a.PersistentKeepalive == b.PersistentKeepalive
+	return a.Name == b.Name && slices.Equal(a.Endpoints, b.Endpoints) && slices.EqualFunc(a.Addresses, b.Addresses, ipNetEqual) && a.ListenPort == b.ListenPort && a.PublicKey == b.PublicKey && (a.PresharedKey != nil && b.PresharedKey != nil && *a.PresharedKey == *b.PresharedKey || a.PresharedKey == nil && b.PresharedKey == nil) && a.PersistentKeepalive == b.PersistentKeepalive && slices.Equal(a.ForwardsFor, b.ForwardsFor)
 }
 
 func (ndc NetworkDeviceCensored) Clone() NetworkDeviceCensored {
 	ndc2 := NetworkDeviceCensored{
-		Name:                ndc.Name,
-		EndpointChosen:      ndc.EndpointChosen,
-		EndpointChosenIndex: ndc.EndpointChosenIndex,
-		ListenPort:          ndc.ListenPort,
-		PublicKey:           ndc.PublicKey,
-		PersistentKeepalive: ndc.PersistentKeepalive,
+		Name:                       ndc.Name,
+		ForwarderAndEndpointChosen: ndc.ForwarderAndEndpointChosen,
+		EndpointChosenIndex:        ndc.EndpointChosenIndex,
+		ForwarderChosenIndex:       ndc.ForwarderChosenIndex,
+		ListenPort:                 ndc.ListenPort,
+		PublicKey:                  ndc.PublicKey,
+		PersistentKeepalive:        ndc.PersistentKeepalive,
 	}
 	ndc2.Endpoints = make([]string, len(ndc.Endpoints))
 	copy(ndc2.Endpoints, ndc.Endpoints)
@@ -260,6 +279,10 @@ func (ndc NetworkDeviceCensored) Clone() NetworkDeviceCensored {
 type AccessControl struct {
 	AccessAll  bool
 	AccessOnly []string
+}
+
+func (a AccessControl) Equal(b AccessControl) bool {
+	return a.AccessAll == b.AccessAll && slices.Equal(a.AccessOnly, b.AccessOnly)
 }
 
 func (a AccessControl) Validate() error {

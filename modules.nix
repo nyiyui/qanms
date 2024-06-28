@@ -172,17 +172,9 @@ args@{ self, system, nixpkgsFor, libFor, nixosLibFor, ldflags, packages, ... }:
           description = "Qrystal on-device services";
           group = "qrystal-device";
         };
-        security.wrappers."qrystal-device-client" = {
-          source = "${packages.device}/bin/device-client";
-          #permissions = "u+rx";
-          owner = "root";
-          group = "root";
-          capabilities = "cap_net_admin+pie cap_net_bind_service+pie"; # TODO: not sure if iep is the correct one here
-        };
         systemd.services.qrystal-device-client = {
           requires = [ "network.target" ];
           serviceConfig = {
-            #ExecStart = "${config.security.wrapperDir}/qrystal-device-client --config=${pkgs.writeText "qrystal-device-client-config.json" (builtins.toJSON deviceCfg.config)} --dns-config=${pkgs.writeText "qrystal-device-dns-config.json" (builtins.toJSON deviceCfg.config.dns)} --dns-self=true";
             ExecStart = "${packages.device}/bin/device-client --config=${pkgs.writeText "qrystal-device-client-config.json" (builtins.toJSON deviceCfg.config)} --dns-config=${pkgs.writeText "qrystal-device-dns-config.json" (builtins.toJSON deviceCfg.config.dns)} --dns-self=true";
             Type = "notify";
             NotifyAccess = "all";
@@ -191,13 +183,10 @@ args@{ self, system, nixpkgsFor, libFor, nixosLibFor, ldflags, packages, ... }:
               "CAP_NET_ADMIN"
               "CAP_NET_BIND_SERVICE"
             ];
-            #CapabilityBoundingSet = [
-            #  "CAP_NET_ADMIN"
-            #  "CAP_NET_BIND_SERVICE"
-            #];
             User = "qrystal-device";
           } // baseServiceConfig;
           wantedBy = [ "multi-user.target" ];
+          path = [ pkgs.iputils ];
         };
       })
     ];

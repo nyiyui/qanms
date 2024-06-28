@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"slices"
 
 	"github.com/vishvananda/netlink"
@@ -37,6 +38,18 @@ func ApplyMachineDiff(a, b Machine, md MachineDiff, client *wgctrl.Client, handl
 		if err != nil {
 			return
 		}
+	}
+	if md.ForwardsIPv4Changed {
+		var data []byte
+		if b.ForwardsIPv4 {
+			data = []byte("1")
+		} else {
+			data = []byte("0")
+		}
+		os.WriteFile("/proc/sys/net/ipv4/ip_forward", data, 0444)
+	}
+	if md.ForwardsIPv6Changed {
+		panic("not implemented yet")
 	}
 	return nil
 }

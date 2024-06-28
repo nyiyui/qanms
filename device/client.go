@@ -3,8 +3,10 @@ package device
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"sync"
@@ -149,23 +151,41 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 	}
 
 	// === choose endpoints ===
+	needsForwarders := make([]int, 0)
 	for i, ndc := range nc.Devices {
 		zap.S().Debugf("i=%d ndcI=%d ndc.Name=%d", i, ndcI, ndc.Name)
 		if i == ndcI {
 			continue
 		}
-		if !ndc.EndpointChosen {
-			zap.S().Debugf("%s/%s: choosing endpoint…", c.network, ndc.Name)
-			//err = (&nc.Devices[i]).ChooseEndpoint(spec.PingCommandScorer)
-			err = (&nc.Devices[i]).ChooseEndpoint(func(string) (int, error) { return 0, nil })
-			if err != nil {
+		if !ndc.ForwarderAndEndpointChosen {
+			zap.S().Debugf("%s/%s: choosing forwarder or endpoint…", c.network, ndc.Name)
+			err = (&nc.Devices[i]).ChooseEndpoint(spec.PingCommandScorer)
+			//err = (&nc.Devices[i]).ChooseEndpoint(func(string) (int, error) { return 0, nil })
+			if errors.Is(err, spec.ErrAllEndpointsBad) {
+				needsForwarders = append(needsForwarders, i)
+				zap.S().Debugf("%s/%s: needs forwarder.", c.network, ndc.Name)
+				continue
+			} else if err != nil {
 				return false, fmt.Errorf("choose endpoint for %s/%s: %w", c.network, ndc.Name, err)
 			}
-			if !nc.Devices[i].EndpointChosen {
+			if !nc.Devices[i].ForwarderAndEndpointChosen {
 				panic("unreachable")
 			}
-			zap.S().Debugf("%s/%s: endpoint %d (%s) chosen.", c.network, ndc.Name, ndc.EndpointChosenIndex, ndc.Endpoints[ndc.EndpointChosenIndex])
+			zap.S().Debugf("%s/%s: endpoint %s chosen.", c.network, ndc.Name, ndc.Endpoints[ndc.EndpointChosenIndex])
 		}
+	}
+	for _, i := range needsForwarders {
+		ndc := nc.Devices[i]
+		zap.S().Debugf("%s/%s: choosing forwarder or endpoint…", c.network, ndc.Name)
+		forwarders := nc.GetForwardersFor(ndc.Name)
+		if len(forwarders) == 0 {
+			return false, fmt.Errorf("choose forwarder for %s/%s: no forwarders", c.network, ndc.Name)
+		}
+		j := rand.Intn(len(forwarders))
+		nc.Devices[i].ForwarderChosenIndex = j
+		nc.Devices[i].UsesForwarder = true
+		nc.Devices[i].ForwarderAndEndpointChosen = true
+		zap.S().Debugf("%s/%s: forwarder %s chosen.", c.network, ndc.Name, ndc.Endpoints[ndc.ForwarderChosenIndex])
 	}
 
 	data, _ = json.MarshalIndent(ndc, "", "  ")

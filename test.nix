@@ -148,9 +148,11 @@ in
           systemd.services.goal1.script = ''
             QRYSTAL_LOGGING_CONFIG=development ${etc}/bin/test-goal -a-path ${machine1} -b-path ${machine2}
           '';
+          systemd.services.goal1.path = [ pkgs.iputils ];
           systemd.services.goal2.script = ''
             QRYSTAL_LOGGING_CONFIG=development ${etc}/bin/test-goal -a-path ${machine2} -b-path ${machine3}
           '';
+          systemd.services.goal2.path = [ pkgs.iputils ];
           systemd.services."continuityClient" = {
             environment.HOST = "peer";
             environment.PORT = builtins.toString continuityPort;
@@ -311,6 +313,7 @@ in
         {
           # wg peer setup using test-device
           imports = [ base ];
+          environment.systemPackages = [ pkgs.iputils ];
         };
       nodes.client2 =
         { pkgs, ... }:
@@ -452,6 +455,7 @@ in
         {
           # wg peer setup using test-device
           imports = [ base ];
+          environment.systemPackages = [ pkgs.iputils ];
           networking.firewall.allowedUDPPorts = [ 51820 ];
         };
       nodes.client2 =
@@ -581,6 +585,7 @@ in
               NotifyAccess = "all";
               StateDirectory = [ "qrystal-device-client" ];
             };
+            path = [ pkgs.iputils ];
           };
         };
       nodes.client2 =
@@ -911,6 +916,7 @@ in
               RestrictNamespaces = true;
               PrivateMounts = true;
             };
+            path = [ pkgs.iputils ];
           };
           networking.firewall.allowedTCPPorts = [ 51820 ];
         };
