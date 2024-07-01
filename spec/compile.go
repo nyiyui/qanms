@@ -37,14 +37,6 @@ func (sc SpecCensored) CompileMachine(name string, ignoreIncomplete bool) (goal.
 			if i == sndI {
 				continue
 			}
-			if !snd.ForwarderAndEndpointChosen {
-				if ignoreIncomplete {
-					zap.S().Debugf("%s/%s does not have a chosen forwarder and endpoint, ignore.", sn.Name, snd.Name)
-					continue
-				} else {
-					return goal.Machine{}, fmt.Errorf("%s/%s does not have a chosen forwarder and endpoint", sn.Name, snd.Name)
-				}
-			}
 			if snd.PublicKey == (goal.Key{}) {
 				if ignoreIncomplete {
 					zap.S().Debugf("%s/%s has unset PublicKey, ignore.", sn.Name, snd.Name)
@@ -53,18 +45,24 @@ func (sc SpecCensored) CompileMachine(name string, ignoreIncomplete bool) (goal.
 					return goal.Machine{}, fmt.Errorf("%s/%s has unset PublicKey", sn.Name, snd.Name)
 				}
 			}
-			endpoint := snd.Endpoints[snd.EndpointChosenIndex]
-			if snd.UsesForwarder {
-				forwarder := sn.Devices[snd.ForwarderChosenIndex]
-				if !forwarder.ForwarderAndEndpointChosen {
-					if ignoreIncomplete {
-						zap.S().Debugf("%s/%s has forwarder %s/%s which does not have a chosen forwarder and endpoint, ignore.", sn.Name, snd.Name, sn.Name, forwarder.Name)
-						continue
-					} else {
-						return goal.Machine{}, fmt.Errorf("%s/%s has forwarder %s/%s which does not have a chosen forwarder and endpoint", sn.Name, snd.Name, sn.Name, forwarder.Name)
+			var endpoint string
+			if !snd.ForwarderAndEndpointChosen {
+				zap.S().Debugf("%s/%s does not have a chosen forwarder and endpoint, proceed with blank Endpoint.", sn.Name, snd.Name)
+			} else {
+				if !snd.UsesForwarder {
+					endpoint = snd.Endpoints[snd.EndpointChosenIndex]
+				} else {
+					forwarder := sn.Devices[snd.ForwarderChosenIndex]
+					if !forwarder.ForwarderAndEndpointChosen {
+						if ignoreIncomplete {
+							zap.S().Debugf("%s/%s has forwarder %s/%s which does not have a chosen forwarder and endpoint, ignore.", sn.Name, snd.Name, sn.Name, forwarder.Name)
+							continue
+						} else {
+							return goal.Machine{}, fmt.Errorf("%s/%s has forwarder %s/%s which does not have a chosen forwarder and endpoint", sn.Name, snd.Name, sn.Name, forwarder.Name)
+						}
 					}
+					endpoint = forwarder.Endpoints[forwarder.EndpointChosenIndex]
 				}
-				endpoint = forwarder.Endpoints[forwarder.EndpointChosenIndex]
 			}
 			peers = append(peers, goal.InterfacePeer{
 				Name:                snd.Name,

@@ -179,7 +179,9 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 		zap.S().Debugf("%s/%s: choosing forwarder or endpoint…", c.network, ndc.Name)
 		forwarders := nc.GetForwardersFor(ndc.Name)
 		if len(forwarders) == 0 {
-			return false, fmt.Errorf("choose forwarder for %s/%s: no forwarders", c.network, ndc.Name)
+			zap.S().Infof("%s/%s has no forwarder or reachable endpoint. I'll continue with no Endpoint, and hope they connect to me.", c.network, ndc.Name)
+			nc.Devices[i].ForwarderAndEndpointChosen = false
+			continue
 		}
 		j := rand.Intn(len(forwarders))
 		nc.Devices[i].ForwarderChosenIndex = j
