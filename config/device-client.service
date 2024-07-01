@@ -3,7 +3,7 @@ Description="Qrystal on-device client"
 Documentation="https://nyiyui.ca/qrystal"
 
 [Service]
-ExecStart=qrystal-device-client --config=/etc/qrystal-device/client-config.json --dns-config=/etc/qrystal-device/qrystal-device-dns-config.json --dns-self=true
+ExecStart=qrystal-device-client --config=/etc/qrystal-device/client-config.json --dns-config=/etc/qrystal-device/dns-config.json --dns-self=true
 Type=notify
 NotifyAccess=all
 StateDirectory=qrystal-device-client
