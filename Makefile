@@ -39,9 +39,10 @@ install-device: device-client
 	systemctl restart systemd-sysusers
 	#
 	mkdir -p ${pkgdir}/etc/qrystal-device/
-	chown root:qrystal-node ${pkgdir}/etc/qrystal-device/
+	chown root:qrystal-device ${pkgdir}/etc/qrystal-device/
 	chmod 755 ${pkgdir}/etc/qrystal-device/
 	install -m 640 -o root -g qrystal-device ${src}/config/device-client-config.json ${pkgdir}/etc/qrystal-device/client-config.json
+	install -m 640 -o root -g qrystal-device ${src}/config/device-dns-config.json ${pkgdir}/etc/qrystal-device/dns-config.json
 	#
 	mkdir -p ${pkgdir}/usr/lib/systemd/system
 	install ${src}/config/device-client.service ${pkgdir}/usr/lib/systemd/system/qrystal-device-client.service
