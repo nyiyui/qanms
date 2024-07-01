@@ -2,9 +2,9 @@ src = .
 flags = -race -tags sdnotify
 
 clean:
-	rm coord-server
-	rm device-client
-	rm gen-keys
+	rm -f coord-server
+	rm -f device-client
+	rm -f gen-keys
 
 coord-server:
 	go build ${flags} ${src}/cmd/coord-server
