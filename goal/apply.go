@@ -145,11 +145,13 @@ func ApplyInterfaceDiff(a, b Interface, id InterfaceDiff, client *wgctrl.Client,
 	// === configure wg interface ===
 	peers := make([]wgtypes.PeerConfig, len(b.Peers))
 	for i, peer := range b.Peers {
-		zap.S().Debugf("resolving %s for peer %s.", peer.Endpoint, peer.Name)
 		var endpoint *net.UDPAddr
-		endpoint, err = net.ResolveUDPAddr("udp", peer.Endpoint)
-		if err != nil {
-			return fmt.Errorf("resolving %s for peer %s: %w", peer.Endpoint, peer.Name, err)
+		if peer.Endpoint != "" {
+			zap.S().Debugf("resolving %s for peer %s.", peer.Endpoint, peer.Name)
+			endpoint, err = net.ResolveUDPAddr("udp", peer.Endpoint)
+			if err != nil {
+				return fmt.Errorf("resolving %s for peer %s: %w", peer.Endpoint, peer.Name, err)
+			}
 		}
 		peers[i] = wgtypes.PeerConfig{
 			PublicKey:    wgtypes.Key(peer.PublicKey),
