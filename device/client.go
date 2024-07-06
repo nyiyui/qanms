@@ -137,6 +137,7 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 		zap.S().Debugf("generated key pair:\nprivate key: %s\npublic key: %s", privateKey, privateKey.PublicKey())
 	}
 	// === update spec's public keys ===
+	zap.S().Debugf("my public key is %s.", wgtypes.Key(ndc.PublicKey))
 	if wgtypes.Key(ndc.PublicKey) != wgtypes.Key(c.privateKey).PublicKey() {
 		zap.S().Debug("public key set in spec mismatch, patching spec…")
 		err = c.patchSpec(coord.PatchReifySpecRequest{
@@ -211,8 +212,11 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 	gm.Interfaces[0].PrivateKey = goal.Key(c.privateKey)
 	data, _ = json.Marshal(gm)
 	zap.S().Debugf("compiled spec:\n%s", data)
+	diff := goal.DiffMachine(&c.Machine, &gm)
+	data, _ = json.Marshal(gm)
+	zap.S().Debugf("diff:\n%s", data)
 	zap.S().Debug("applying machine…")
-	err = goal.ApplyMachineDiff(c.Machine, gm, goal.DiffMachine(&c.Machine, &gm), c.wgClient, c.netlinkHandle)
+	err = goal.ApplyMachineDiff(c.Machine, gm, diff, c.wgClient, c.netlinkHandle)
 	if err != nil {
 		return false, fmt.Errorf("apply spec: %w", err)
 	}
