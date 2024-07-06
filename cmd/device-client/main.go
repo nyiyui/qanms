@@ -208,6 +208,7 @@ func createGoroutines(m *MachineData, dnsClient dns.Client, config Config) {
 			if err != nil {
 				panic(err)
 			}
+			c.Machine = m.Machines[clientName]
 			c.SetDNSClient(dnsClient)
 			continuous := new(device.ContinousClient)
 			continuous.Client = c

@@ -964,4 +964,163 @@ in
         '';
     }
   );
+  coordServerIntegration-continuous-triple-module-forwarding = lib.runTest (
+    let
+      module = self.outputs.nixosModules.${system}.default;
+      etc = self.outputs.packages.${system}.etc;
+      serverPort = 39390;
+      client1PrivateKey = "WMRg3WjzE0ZLuP4bAWtvcrh/Tw23MR3kv4VjpAQQz04=";
+      client1PublicKey = "0LrS7ekXRHD8pLEimzLfeLlKyPprJR9oJwdAMOGhtU0=";
+      client2PrivateKey = "AFiQ0ipcWrEluvCmaEoQ7PQeurOo3bVRXANAOXYny0s=";
+      client2PublicKey = "J4nZeURCVbUmo5w/IBnaCU9M5tOMqGRZnPB2vAji4hE=";
+      client3PrivateKey = "8C/kJIoIzmJBKhQ4zHzjgVBNtdolVCPbChdb/b8zl3k=";
+      client3PublicKey = "puL1ZQzr/Qon7Xm1EULGq3j2lxwo2bn7k7nasuQrLXk=";
+      client1TokenHash = "qrystalcth_30e72874f2598c1ad8020507182a4f57a7304806947b677b69c7d76a88003bc6";
+      client3Token = "qrystalct_S09ibZAXpMCuTw7ennAvNT4Hk53MdSGl5zgXEN8Nnf6lMq6xMaz5q/PK5yYm5WwXROepQaT1P57qZvqnvWNC8w==";
+      client3TokenHash = "qrystalcth_0f50dd6c7ebe4803409f81c0489b01ee1ce5c2abaae4de966731f8cc3717102f";
+      tokens = {
+        ${client1TokenHash} = {
+          Identities = [
+            [
+              "wiring"
+              "client1"
+            ]
+          ];
+        };
+        ${client3TokenHash} = { Identities = [ ["wiring" "client3"] ]; };
+      };
+      spec.Networks = [
+        {
+          Name = "wiring";
+          Devices = [
+            {
+              Name = "client1";
+              Endpoints = [ "client1:51820" ];
+              Addresses = [ "10.10.0.1/32" ];
+              ListenPort = 51820;
+              PersistentKeepalive = "1s";
+              ForwardsFor = [ "client2" ];
+              AccessAll = true;
+            }
+            {
+              # client2 is manually configured, and purposefully does not have cryptokey routing for client3
+              Name = "client2";
+              Endpoints = [ "client2:51820" ];
+              Addresses = [ "10.10.0.2/32" ];
+              ListenPort = 51820;
+              PublicKey = client2PublicKey;
+              AccessAll = true;
+            }
+            {
+              Name = "client3";
+              Endpoints = [ "client3:51820" ];
+              Addresses = [ "10.10.0.3/32" ];
+              ListenPort = 51820;
+              PersistentKeepalive = "1s";
+              AccessAll = true;
+            }
+          ];
+        }
+      ];
+    in
+    {
+      name = "coordServerIntegration-continuous-triple-module-forwarding";
+      hostPkgs = pkgs;
+      nodes.server =
+        { pkgs, ... }:
+        {
+          # not a wg peer
+          imports = [ base module ];
+          services.qrystal-coord-server = {
+            enable = true;
+            openFirewall = true;
+            bind.address = "0.0.0.0";
+            bind.port = serverPort;
+            config.Tokens = tokens;
+            config.Spec = spec;
+          };
+        };
+      nodes.client1 =
+        { pkgs, ... }:        {
+          # wg peer setup using test-device
+          imports = [ base module ];
+          services.qrystal-device-client = {
+            enable = true;
+            config.Clients.server = {
+              BaseURL = "http://server:${builtins.toString serverPort}";
+              TokenPath = "${pkgs.writeText "client1Token" "qrystalct_ZXcX7NyjY2aqiy5bb7Oe952QSCsVxzh2FU2ahvaPiHZPJaWeN+Xi59HHvqTDT0Tyy7IOhzC9Uc3Nn7dQ+8GhbQ=="}";
+              Network = "wiring";
+              Device = "client1";
+              PrivateKeyPath = "${pkgs.writeText "client1PublicKey" client1PrivateKey}";
+              MinimumInterval = "20s";
+            };
+            config.dns.enable = true;
+            config.dns.Address = "127.0.0.39:53";
+          };
+        };
+      nodes.client2 =
+        { pkgs, ... }:
+        {
+          # wg peer setup using NixOS's wireguard module
+          imports = [ base ];
+          networking.wireguard.interfaces = {
+            wiring = {
+              ips = [ "10.10.0.2/32" ];
+              privateKey = client2PrivateKey;
+              listenPort = 51820;
+              peers = [
+                {
+                  publicKey = client1PublicKey;
+                  allowedIPs = [ "10.10.0.1/32" ];
+                  endpoint = "client1:51820";
+                  persistentKeepalive = 1;
+                }
+              ];
+            };
+          };
+        };
+      nodes.client3 =
+        { pkgs, ... }:        {
+          # wg peer setup using test-device
+          imports = [ base module ];
+          services.qrystal-device-client = {
+            enable = true;
+            config.Clients.server = {
+              BaseURL = "http://server:${builtins.toString serverPort}";
+              TokenPath = "${pkgs.writeText "client3Token" client3Token}";
+              Network = "wiring";
+              Device = "client3";
+              PrivateKeyPath = "${pkgs.writeText "client3PublicKey" client3PrivateKey}";
+              MinimumInterval = "20s";
+            };
+            config.dns.enable = true;
+            config.dns.Address = "127.0.0.39:53";
+          };
+        };
+      testScript =
+        { ... }:
+        ''
+          start_all()
+          client3.wait_until_succeeds("ping -c 1 client2")
+          client3_ip = client3.execute("ip -4 addr show eth1 | grep -oP '(?<=inet\s)\d+(\.\d+){3}'")[1].strip()
+          #client2.succeed(f"iptables -A INPUT -s {client3_ip} -p icmp --icmp-type echo-request -j DROP")
+          client2.succeed(f"iptables -A INPUT -s {client3_ip} -i eth1 -j DROP")
+          client3.fail("ping -c 1 client2")
+          raise RuntimeError("test is not implemented yet")
+          #server.wait_until_succeeds("systemctl start qrystal-coord-server.service")
+          #server.wait_until_succeeds("systemctl status qrystal-coord-server.service")
+          #client1.wait_until_succeeds("systemctl start qrystal-device-client.service")
+          #client1.wait_until_succeeds("systemctl status qrystal-device-client.service")
+          #server.succeed("systemctl status qrystal-coord-server.service")
+          #client1.wait_until_succeeds("ping -c 2 10.10.0.1")
+          #client1.wait_until_succeeds("ping -c 2 10.10.0.2")
+          #assert "10.10.0.1" in client1.succeed("host client1.wiring.qrystal.internal 127.0.0.39"), "client1.wiring.qrystal.internal"
+          #assert "10.10.0.1" in client1.succeed("host client1.nyiyui.ca 127.0.0.39"), "client1.nyiyui.ca"
+          #assert "10.10.0.2" in client1.succeed("host client2.wiring.qrystal.internal 127.0.0.39"), "client2.wiring.qrystal.internal"
+          #assert "10.10.0.2" in client1.succeed("host client2.nyiyui.ca 127.0.0.39"), "client2.nyiyui.ca"
+          #client2.succeed("ping -c 2 10.10.0.1")
+          #client2.succeed("ping -c 2 10.10.0.2")
+        '';
+    }
+  );
 }

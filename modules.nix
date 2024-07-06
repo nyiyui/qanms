@@ -50,6 +50,11 @@ args@{ self, system, nixpkgsFor, libFor, nixosLibFor, ldflags, packages, ... }:
         default = "0s";
         description = "Specifies how oftan a packet is sent by WireGuard to keep make sure the connection is seen as alive. Leave zero to disable.";
       };
+      options.ForwardsFor = mkOption {
+        type = listOf str;
+        default = [];
+        description = "List of devices (in the same network) that this peer has access to, and can fowrard packets to.";
+      };
       options.AccessAll = mkOption {
         type = bool;
         default = true;
