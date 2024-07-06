@@ -212,6 +212,8 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 	gm.Interfaces[0].PrivateKey = goal.Key(c.privateKey)
 	data, _ = json.Marshal(gm)
 	zap.S().Debugf("compiled spec:\n%s", data)
+	data, _ = json.Marshal(c.Machine)
+	zap.S().Debugf("machine spec:\n%s", data)
 	diff := goal.DiffMachine(&c.Machine, &gm)
 	data, _ = json.Marshal(diff)
 	zap.S().Debugf("diff:\n%s", data)
