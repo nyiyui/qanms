@@ -213,7 +213,7 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 	data, _ = json.Marshal(gm)
 	zap.S().Debugf("compiled spec:\n%s", data)
 	diff := goal.DiffMachine(&c.Machine, &gm)
-	data, _ = json.Marshal(gm)
+	data, _ = json.Marshal(diff)
 	zap.S().Debugf("diff:\n%s", data)
 	zap.S().Debug("applying machine…")
 	err = goal.ApplyMachineDiff(c.Machine, gm, diff, c.wgClient, c.netlinkHandle)
