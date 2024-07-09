@@ -35,7 +35,13 @@ func ApplyMachineDiff(a, b Machine, md MachineDiff, client *wgctrl.Client, handl
 		bIndex := slices.IndexFunc(b.Interfaces, func(iface Interface) bool { return iface.Name == ifaceName })
 		id := DiffInterface(&a.Interfaces[aIndex], &b.Interfaces[bIndex])
 		err = ApplyInterfaceDiff(a.Interfaces[aIndex], b.Interfaces[bIndex], id, client, handle, false)
-		if err != nil {
+		if _,ok:=err.(netlink.LinkNotFoundError);ok {
+			// machine data may contain links that were deleted by rebooting. Use CreateInterface instead for this case.
+			err = CreateInterface(b.Interfaces[bIndex], client, handle)
+			if err != nil {
+				return fmt.Errorf("create missing interface %s: %w", ifaceName, err)
+			}
+		} else if err != nil {
 			return
 		}
 	}
