@@ -215,7 +215,7 @@ func createGoroutines(m *MachineData, dnsClient dns.Client, config Config) {
 			zap.S().Infof("%s: created client.", clientName)
 
 			t := time.NewTicker(time.Duration(cc.MinimumInterval))
-			for range t.C {
+			for {
 				latest := false
 				for !latest {
 					var updated bool
@@ -245,6 +245,7 @@ func createGoroutines(m *MachineData, dnsClient dns.Client, config Config) {
 					zap.S().Info("sleeping 1 second until next loop.")
 					time.Sleep(1 * time.Second)
 				}
+				<-t.C
 			}
 		}(clientName, cc)
 	}
