@@ -10,7 +10,25 @@ version).
 
 ## Installation
 
-TODO
+1. [Install Go](https://go.dev/dl)
+2. Download the source: https://github.com/nyiyui/qrystal/archive/refs/heads/next2goal.tar.gz
+3. cd-into the source code
+
+### Installing for a Device Client
+
+4. `make device-client gen-keys`
+5. `sudo make install-device`
+  - If you see errors such as 'user not found', make sure systemd-sysusersd has run after the Makefile ran.
+6. Edit config files at `/etc/qrystal-device/` (`gen-keys` will be useful here!)
+7. `systemctl enable --now qrystal-device-client.service`
+
+### Installing for a Coordiation Server
+
+4. `make coord-server`
+5. `sudo make install-coord`
+  - If you see errors such as 'user not found', make sure systemd-sysusersd has run after the Makefile ran.
+6. Edit config files at `/etc/qrystal-coord/`
+7. `systemctl enable --now qrystal-coord-server.service`
 
 ## Contributing
 
