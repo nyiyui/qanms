@@ -159,7 +159,7 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 			continue
 		}
 		if !ndc.ForwarderAndEndpointChosen {
-			zap.S().Debugf("%s/%s: choosing forwarder or endpoint…", c.network, ndc.Name)
+			zap.S().Debugf("%s/%s: choosing endpoint…", c.network, ndc.Name)
 			err = (&nc.Devices[i]).ChooseEndpoint(spec.PingCommandScorer)
 			//err = (&nc.Devices[i]).ChooseEndpoint(func(string) (int, error) { return 0, nil })
 			if errors.Is(err, spec.ErrAllEndpointsBad) {
@@ -177,7 +177,7 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 	}
 	for _, i := range needsForwarders {
 		ndc := nc.Devices[i]
-		zap.S().Debugf("%s/%s: choosing forwarder or endpoint…", c.network, ndc.Name)
+		zap.S().Debugf("%s/%s: choosing forwarder…", c.network, ndc.Name)
 		forwarders := nc.GetForwardersFor(ndc.Name)
 		if len(forwarders) == 0 {
 			zap.S().Infof("%s/%s has no forwarder or reachable endpoint. I'll continue with no Endpoint, and hope they connect to me.", c.network, ndc.Name)
