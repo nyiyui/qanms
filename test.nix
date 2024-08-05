@@ -676,7 +676,10 @@ in
         { pkgs, ... }:
         {
           # not a wg peer
-          imports = [ base module ];
+          imports = [
+            base
+            module
+          ];
           services.qrystal-coord-server = {
             enable = true;
             openFirewall = true;
@@ -687,9 +690,13 @@ in
           };
         };
       nodes.client1 =
-        { pkgs, ... }:        {
+        { pkgs, ... }:
+        {
           # wg peer setup using test-device
-          imports = [ base module ];
+          imports = [
+            base
+            module
+          ];
           services.qrystal-device-client = {
             enable = true;
             config.Clients.server = {
@@ -987,7 +994,14 @@ in
             ]
           ];
         };
-        ${client3TokenHash} = { Identities = [ ["wiring" "client3"] ]; };
+        ${client3TokenHash} = {
+          Identities = [
+            [
+              "wiring"
+              "client3"
+            ]
+          ];
+        };
       };
       spec.Networks = [
         {
@@ -1030,7 +1044,10 @@ in
         { pkgs, ... }:
         {
           # not a wg peer
-          imports = [ base module ];
+          imports = [
+            base
+            module
+          ];
           services.qrystal-coord-server = {
             enable = true;
             openFirewall = true;
@@ -1041,9 +1058,13 @@ in
           };
         };
       nodes.client1 =
-        { pkgs, ... }:        {
+        { pkgs, ... }:
+        {
           # wg peer setup using test-device
-          imports = [ base module ];
+          imports = [
+            base
+            module
+          ];
           services.qrystal-device-client = {
             enable = true;
             config.Clients.server = {
@@ -1080,9 +1101,13 @@ in
           };
         };
       nodes.client3 =
-        { pkgs, ... }:        {
+        { pkgs, ... }:
+        {
           # wg peer setup using test-device
-          imports = [ base module ];
+          imports = [
+            base
+            module
+          ];
           services.qrystal-device-client = {
             enable = true;
             config.Clients.server = {

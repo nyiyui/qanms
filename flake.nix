@@ -90,7 +90,10 @@
               common
               // {
                 pname = "device-client";
-                subPackages = [ "cmd/device-client" "cmd/device-dns" ];
+                subPackages = [
+                  "cmd/device-client"
+                  "cmd/device-dns"
+                ];
               }
             );
             etc = pkgs.buildGoModule (
@@ -119,7 +122,15 @@
             ;
         };
         nixosModules = (import ./modules.nix) {
-          inherit self system nixpkgsFor libFor nixosLibFor ldflags packages;
+          inherit
+            self
+            system
+            nixpkgsFor
+            libFor
+            nixosLibFor
+            ldflags
+            packages
+            ;
         };
       }
     );
