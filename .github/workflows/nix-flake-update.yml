@@ -1,0 +1,22 @@
+name: nix flake update
+on:
+  schedule:
+    - cron: "0 0 * * 5"
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: cachix/install-nix-action@v20
+        with:
+          gitub_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - run: nix flake update
+      - name: commit and push
+        run: |
+          git config user.name 'GitHub Actions'
+          git config user.email 'github-actions@nyiyui.ca'
+          git add flake.lock
+          git commit -am "nix flake update"
+          git push

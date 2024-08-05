@@ -55,6 +55,7 @@
                 nixfmt-rfc-style
                 govulncheck
                 nix-prefetch
+                act
               ];
             };
           };
