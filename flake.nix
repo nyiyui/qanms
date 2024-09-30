@@ -49,9 +49,6 @@
                 bash
                 go
                 git
-                protobuf
-                protoc-gen-go
-                protoc-gen-go-grpc
                 nixfmt-rfc-style
                 govulncheck
                 nix-prefetch
