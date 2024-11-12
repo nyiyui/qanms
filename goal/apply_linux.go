@@ -1,3 +1,5 @@
+//go:build linux
+
 package goal
 
 import (
@@ -14,7 +16,14 @@ import (
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
-func ApplyMachineDiff(a, b Machine, md MachineDiff, client *wgctrl.Client, handle *netlink.Handle) (err error) {
+type Handle = netlink.Handle
+
+func NewHandle() (*Handle, error) {
+	h, err := netlink.NewHandle()
+	return h, err
+}
+
+func ApplyMachineDiff(a, b Machine, md MachineDiff, client *wgctrl.Client, handle *Handle) (err error) {
 	for _, iface := range md.InterfacesRemoved {
 		zap.S().Debugf("removing interface %s.", iface.Name)
 		err = DeleteInterface(iface, client, handle)
@@ -35,7 +44,7 @@ func ApplyMachineDiff(a, b Machine, md MachineDiff, client *wgctrl.Client, handl
 		bIndex := slices.IndexFunc(b.Interfaces, func(iface Interface) bool { return iface.Name == ifaceName })
 		id := DiffInterface(&a.Interfaces[aIndex], &b.Interfaces[bIndex])
 		err = ApplyInterfaceDiff(a.Interfaces[aIndex], b.Interfaces[bIndex], id, client, handle, false)
-		if _,ok:=err.(netlink.LinkNotFoundError);ok {
+		if _, ok := err.(netlink.LinkNotFoundError); ok {
 			// machine data may contain links that were deleted by rebooting. Use CreateInterface instead for this case.
 			err = CreateInterface(b.Interfaces[bIndex], client, handle)
 			if err != nil {
@@ -60,7 +69,7 @@ func ApplyMachineDiff(a, b Machine, md MachineDiff, client *wgctrl.Client, handl
 	return nil
 }
 
-func DeleteInterface(iface Interface, client *wgctrl.Client, handle *netlink.Handle) (err error) {
+func DeleteInterface(iface Interface, client *wgctrl.Client, handle *Handle) (err error) {
 	// Steps:
 	// - delete interface
 
@@ -74,7 +83,7 @@ func DeleteInterface(iface Interface, client *wgctrl.Client, handle *netlink.Han
 	return
 }
 
-func CreateInterface(iface Interface, client *wgctrl.Client, handle *netlink.Handle) (err error) {
+func CreateInterface(iface Interface, client *wgctrl.Client, handle *Handle) (err error) {
 	// Steps:
 	// - add interface
 
@@ -121,7 +130,7 @@ func CreateInterface(iface Interface, client *wgctrl.Client, handle *netlink.Han
 	return ApplyInterfaceDiff(a, iface, id, client, handle, true)
 }
 
-func ApplyInterfaceDiff(a, b Interface, id InterfaceDiff, client *wgctrl.Client, handle *netlink.Handle, setUpLink bool) error {
+func ApplyInterfaceDiff(a, b Interface, id InterfaceDiff, client *wgctrl.Client, handle *Handle, setUpLink bool) error {
 	// Steps:
 	// - configure wg interface
 	// - remove addresses from wg interface

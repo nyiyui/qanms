@@ -16,20 +16,19 @@ import (
 	"github.com/nyiyui/qrystal/goal"
 	"github.com/nyiyui/qrystal/spec"
 	"github.com/nyiyui/qrystal/util"
-	"github.com/vishvananda/netlink"
 	"go.uber.org/zap"
 	"golang.zx2c4.com/wireguard/wgctrl"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
 type Client struct {
-	client        *http.Client
-	baseURL       *url.URL
-	Machine       goal.Machine
-	wgClient      *wgctrl.Client
-	netlinkHandle *netlink.Handle
-	dns           dns.Client
-	dnsLock       sync.Mutex
+	client     *http.Client
+	baseURL    *url.URL
+	Machine    goal.Machine
+	wgClient   *wgctrl.Client
+	goalHandle *goal.Handle
+	dns        dns.Client
+	dnsLock    sync.Mutex
 
 	spec       spec.SpecCensored
 	token      util.Token
@@ -47,7 +46,7 @@ func NewClient(httpClient *http.Client, baseURL string, token util.Token, networ
 	if err != nil {
 		return nil, err
 	}
-	netlinkHandle, err := netlink.NewHandle()
+	goalHandle, err := goal.NewHandle()
 	if err != nil {
 		return nil, err
 	}
@@ -55,14 +54,14 @@ func NewClient(httpClient *http.Client, baseURL string, token util.Token, networ
 		httpClient = new(http.Client)
 	}
 	return &Client{
-		client:        httpClient,
-		baseURL:       baseURL2,
-		wgClient:      wgClient,
-		netlinkHandle: netlinkHandle,
-		token:         token,
-		network:       network,
-		device:        device,
-		privateKey:    privateKey,
+		client:     httpClient,
+		baseURL:    baseURL2,
+		wgClient:   wgClient,
+		goalHandle: goalHandle,
+		token:      token,
+		network:    network,
+		device:     device,
+		privateKey: privateKey,
 	}, nil
 }
 
@@ -218,7 +217,7 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 	data, _ = json.Marshal(diff)
 	zap.S().Debugf("diff:\n%s", data)
 	zap.S().Debug("applying machine…")
-	err = goal.ApplyMachineDiff(c.Machine, gm, diff, c.wgClient, c.netlinkHandle)
+	err = goal.ApplyMachineDiff(c.Machine, gm, diff, c.wgClient, c.goalHandle)
 	if err != nil {
 		return false, fmt.Errorf("apply spec: %w", err)
 	}
