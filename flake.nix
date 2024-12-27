@@ -25,7 +25,7 @@
       # Helper function to generate an attrset '{ x86_64-linux = f "x86_64-linux"; ... }'.
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
 
-      # Nixpkgs instantiated for supported system 
+      # Nixpkgs instantiated for supported system
       nixpkgsFor = forAllSystems (system: import nixpkgs { inherit system; });
       libFor = forAllSystems (system: import (nixpkgs + "/lib"));
       nixosLibFor = forAllSystems (system: import (nixpkgs + "/nixos/lib"));
