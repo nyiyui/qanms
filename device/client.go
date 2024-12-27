@@ -153,7 +153,7 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 	// === choose endpoints ===
 	needsForwarders := make([]int, 0)
 	for i, ndc := range nc.Devices {
-		zap.S().Debugf("i=%d ndcI=%d ndc.Name=%d", i, ndcI, ndc.Name)
+		zap.S().Debugf("i=%d ndcI=%d ndc.Name=%s", i, ndcI, ndc.Name)
 		if i == ndcI {
 			continue
 		}
