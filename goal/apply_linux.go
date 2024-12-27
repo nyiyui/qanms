@@ -187,8 +187,7 @@ func ApplyInterfaceDiff(a, b Interface, id InterfaceDiff, client *wgctrl.Client,
 	} else {
 		cfg.ListenPort = &b.ListenPort
 	}
-	data, _ = json.MarshalIndent(cfg, "  ", "  ")
-	zap.S().Debugf("wg interface configuration:\n%s", data)
+	zap.S().Debugf("wg interface configuration:\n%s", StringConfig(&cfg))
 	err = client.ConfigureDevice(b.Name, cfg)
 	if err != nil {
 		return fmt.Errorf("configuring wg interface: %w", err)

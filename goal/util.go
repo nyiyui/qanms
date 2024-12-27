@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
@@ -58,4 +59,36 @@ func (k *Key) UnmarshalJSON(data []byte) error {
 
 func (k Key) MarshalJSON() ([]byte, error) {
 	return json.Marshal(wgtypes.Key(k).String())
+}
+
+func StringConfig(cfg *wgtypes.Config) string {
+	b := new(strings.Builder)
+	tags := ""
+	if cfg.ReplacePeers {
+		tags += " replace"
+	}
+	fmt.Fprintf(b, "[Interface]%s\n", tags)
+	fmt.Fprintf(b, "PrivateKey = %s\n", cfg.PrivateKey)
+	fmt.Fprintf(b, "ListenPort = %d\n", cfg.ListenPort)
+	fmt.Fprintf(b, "FirewallMark = %d\n", cfg.FirewallMark)
+	fmt.Fprintf(b, "ReplacePeers = %t\n\n", cfg.ReplacePeers)
+	for i, peer := range cfg.Peers {
+		tags := ""
+		if peer.Remove {
+			tags += " remove"
+		}
+		if peer.UpdateOnly {
+			tags += " update-only"
+		}
+		if peer.ReplaceAllowedIPs {
+			tags += " replace-allowed-ips"
+		}
+		fmt.Fprintf(b, "[Peer %d]%s\n", i, tags)
+		fmt.Fprintf(b, "PublicKey = %s\n", peer.PublicKey)
+		fmt.Fprintf(b, "PresharedKey = %s\n", peer.PresharedKey)
+		fmt.Fprintf(b, "Keepalive = %d\n", peer.PersistentKeepaliveInterval)
+		fmt.Fprintf(b, "Endpoint = %s\n", peer.Endpoint)
+		fmt.Fprintf(b, "AllowedIPs = %v\n", peer.AllowedIPs)
+	}
+	return b.String()
 }
