@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"slices"
+	"strconv"
 
 	"github.com/vishvananda/netlink"
 	"go.uber.org/zap"
@@ -55,15 +56,26 @@ func ApplyMachineDiff(a, b Machine, md MachineDiff, client *wgctrl.Client, handl
 		}
 	}
 	if md.ForwardsIPv4Changed {
-		var data []byte
-		if b.ForwardsIPv4 {
-			data = []byte("1")
-		} else {
-			data = []byte("0")
-		}
-		err := os.WriteFile("/proc/sys/net/ipv4/ip_forward", data, 0444)
+		data, err := os.ReadFile("/proc/sys/net/ipv4/ip_forward")
 		if err != nil {
-			zap.S().Errorf("writing /proc/sys/net/ipv4/ip_forward: %s", err)
+			return fmt.Errorf("reading /proc/sys/net/ipv4/ip_forward: %w", err)
+		}
+		value, err := strconv.Atoi(string(data))
+		if err != nil {
+			return fmt.Errorf("parsing /proc/sys/net/ipv4/ip_forward: %w", err)
+		}
+		oldValue := value == 1
+		if oldValue != b.ForwardsIPv4 {
+			var data []byte
+			if b.ForwardsIPv4 {
+				data = []byte("1")
+			} else {
+				data = []byte("0")
+			}
+			err := os.WriteFile("/proc/sys/net/ipv4/ip_forward", data, 0444)
+			if err != nil {
+				return fmt.Errorf("writing /proc/sys/net/ipv4/ip_forward: %w", err)
+			}
 		}
 	}
 	if md.ForwardsIPv6Changed {
