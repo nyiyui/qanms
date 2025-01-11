@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"slices"
 	"sync"
 
 	"github.com/nyiyui/qrystal/coord"
@@ -29,6 +30,7 @@ type Client struct {
 	goalHandle *goal.Handle
 	dns        dns.Client
 	dnsLock    sync.Mutex
+	canForward bool
 
 	spec       spec.SpecCensored
 	token      util.Token
@@ -63,6 +65,10 @@ func NewClient(httpClient *http.Client, baseURL string, token util.Token, networ
 		device:     device,
 		privateKey: privateKey,
 	}, nil
+}
+
+func (c *Client) SetCanForward(canForward bool) {
+	c.canForward = canForward
 }
 
 func (c *Client) SetDNSClient(client dns.Client) {
@@ -281,14 +287,18 @@ func (c *Client) patchAccessible(nc *spec.NetworkCensored) error {
 	zap.S().Debugf("ndcI = %s", ndcI)
 
 	var accessible []string
-	for _, ndc := range nc.Devices {
-		if ndc.ForwarderAndEndpointChosen {
-			accessible = append(accessible, ndc.Name)
+	if c.canForward {
+		for _, ndc := range nc.Devices {
+			if ndc.ForwarderAndEndpointChosen {
+				accessible = append(accessible, ndc.Name)
+			}
 		}
-	}
-	if len(accessible) != 0 {
-		nc.Devices[ndcI].Accessible = accessible
 		zap.S().Debugf("I can forward for %d devices.", len(accessible))
+	} else {
+		zap.S().Debug("I cannot forward by configuration.")
+	}
+	if !slices.Equal(accessible, nc.Devices[ndcI].Accessible) {
+		nc.Devices[ndcI].Accessible = accessible
 		err := c.patchSpec(coord.PatchReifySpecRequest{
 			Accessible:    accessible,
 			AccessibleSet: true,
@@ -296,8 +306,6 @@ func (c *Client) patchAccessible(nc *spec.NetworkCensored) error {
 		if err != nil {
 			return fmt.Errorf("patch spec: %w", err)
 		}
-	} else {
-		zap.S().Infof("I can't forward for any devices.")
 	}
 	return nil
 }
