@@ -212,7 +212,7 @@ func (s *Server) patchReifySpec(w http.ResponseWriter, r *http.Request) {
 	if req.AccessibleSet {
 		for _, name := range req.Accessible {
 			if _, ok := newSpec.Networks[nI].GetDevice(name); !ok {
-				http.Error(w, fmt.Sprintf("ForwardsFor contains nonexistent device name: %s/%s", network, name), 400)
+				http.Error(w, fmt.Sprintf("Accessible contains nonexistent device name: %s/%s", network, name), 400)
 				return
 			}
 		}
@@ -271,6 +271,10 @@ func (s *Server) postReifyStatus(w http.ResponseWriter, r *http.Request) {
 	nI, _ := s.spec.GetNetworkIndex(network)
 	if !req.Reified.Equal(s.spec.Networks[nI].CensorForDevice(device)) {
 		zap.S().Infof("given network does not match mine (mine minus given):\n%s", cmp.Diff(req.Reified, s.spec.Networks[nI].CensorForDevice(device)))
+		data, _ := json.Marshal(req.Reified)
+		zap.S().Infof("given network:\n%s", data)
+		data, _ = json.Marshal(s.spec.Networks[nI].CensorForDevice(device))
+		zap.S().Infof("my network:\n%s", data)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
 		err := json.NewEncoder(w).Encode(PostReifyStatusResponse{false})
