@@ -25,7 +25,7 @@ import (
 
 type Config struct {
 	Clients    map[string]ClientConfig
-	CanFoaward bool
+	CanForward bool
 }
 
 type ClientConfig struct {
@@ -209,7 +209,7 @@ func createGoroutines(m *MachineData, dnsClient dns.Client, config Config) {
 			if err != nil {
 				panic(err)
 			}
-			if !config.CanFoaward {
+			if !config.CanForward {
 				c.SetCanForward(false)
 			}
 			c.Machine = m.Machines[clientName]

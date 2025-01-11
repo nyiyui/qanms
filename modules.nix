@@ -188,6 +188,11 @@ args@{
                 type = attrsOf clientConfig;
                 default = [ ];
               };
+              CanForward = mkOption {
+                type = bool;
+                default = true;
+                description = "Enables the device to forward packets between peers.";
+              };
               dns = mkOption {
                 type = submodule {
                   options.enable = mkEnableOption "Qrystal on-device DNS server.";
