@@ -157,8 +157,10 @@ type PatchReifySpecRequest struct {
 	PresharedKeySet        bool
 	PersistentKeepalive    goal.Duration
 	PersistentKeepaliveSet bool
-	ForwardsFor            []string
-	ForwardsForSet         bool
+
+	// Accessible is the list of devices accessible without forwarding.
+	Accessible    []string
+	AccessibleSet bool
 }
 
 func (s *Server) patchReifySpec(w http.ResponseWriter, r *http.Request) {
@@ -206,15 +208,15 @@ func (s *Server) patchReifySpec(w http.ResponseWriter, r *http.Request) {
 	if req.PersistentKeepaliveSet {
 		newSpec.Networks[nI].Devices[sndI].PersistentKeepalive = req.PersistentKeepalive
 	}
-	if req.ForwardsForSet {
+	if req.AccessibleSet {
 		// TODO: check req.ForwardsFor validity
-		for _, name := range req.ForwardsFor {
+		for _, name := range req.Accessible {
 			if _, ok := newSpec.Networks[nI].GetDevice(name); !ok {
 				http.Error(w, fmt.Sprintf("ForwardsFor contains nonexistent device name: %s/%s", network, name), 400)
 				return
 			}
 		}
-		newSpec.Networks[nI].Devices[sndI].ForwardsFor = req.ForwardsFor
+		newSpec.Networks[nI].Devices[sndI].ForwardsFor = req.Accessible
 	}
 	s.latestLock.Lock()
 	defer s.latestLock.Unlock()

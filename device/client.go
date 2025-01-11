@@ -284,8 +284,8 @@ func (c *Client) patchForwardsFor(nc *spec.NetworkCensored) error {
 	if len(forwardsFor) == 0 {
 		zap.S().Debugf("I can forward for %d devices.", len(forwardsFor))
 		err := c.patchSpec(coord.PatchReifySpecRequest{
-			ForwardsFor:    forwardsFor,
-			ForwardsForSet: true,
+			Accessible:    forwardsFor,
+			AccessibleSet: true,
 		})
 		if err != nil {
 			return fmt.Errorf("patch spec: %w", err)
