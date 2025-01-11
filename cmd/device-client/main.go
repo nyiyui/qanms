@@ -209,9 +209,7 @@ func createGoroutines(m *MachineData, dnsClient dns.Client, config Config) {
 			if err != nil {
 				panic(err)
 			}
-			if !config.CanForward {
-				c.SetCanForward(false)
-			}
+			c.SetCanForward(config.CanForward)
 			c.Machine = m.Machines[clientName]
 			c.SetDNSClient(dnsClient)
 			continuous := new(device.ContinousClient)
