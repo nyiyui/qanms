@@ -290,6 +290,8 @@ func (c *Client) patchForwardsFor(nc *spec.NetworkCensored) error {
 		if err != nil {
 			return fmt.Errorf("patch spec: %w", err)
 		}
+	} else {
+		zap.S().Infof("I can't forward for any devices.")
 	}
 	return nil
 }
