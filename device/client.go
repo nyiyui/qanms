@@ -334,6 +334,8 @@ func (c *Client) patchSpec(body coord.PatchReifySpecRequest) error {
 }
 
 func (c *Client) postReifyStatus(nc spec.NetworkCensored) (latest bool, err error) {
+	data, _ = json.MarshalIndent(nc, "", "  ")
+	zap.S().Debugf("nc2:\n%s", data)
 	data, err := json.Marshal(coord.PostReifyStatusRequest{
 		Reified: nc,
 	})
