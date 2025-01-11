@@ -10,6 +10,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/vishvananda/netlink"
 	"go.uber.org/zap"
@@ -60,7 +61,7 @@ func ApplyMachineDiff(a, b Machine, md MachineDiff, client *wgctrl.Client, handl
 		if err != nil {
 			return fmt.Errorf("reading /proc/sys/net/ipv4/ip_forward: %w", err)
 		}
-		value, err := strconv.Atoi(string(data))
+		value, err := strconv.Atoi(strings.TrimSpace(data))
 		if err != nil {
 			return fmt.Errorf("parsing /proc/sys/net/ipv4/ip_forward: %w", err)
 		}
