@@ -274,16 +274,23 @@ func (c *Client) chooseEndpoints(nc *spec.NetworkCensored) error {
 }
 
 func (c *Client) patchAccessible(nc *spec.NetworkCensored) error {
-	var forwardsFor []string
+	ndcI, ok := nc.GetDeviceIndex(c.device)
+	if !ok {
+		panic("unreachable")
+	}
+	zap.S().Debugf("ndcI = %s", ndcI)
+
+	var accessible []string
 	for _, ndc := range nc.Devices {
 		if ndc.ForwarderAndEndpointChosen {
-			forwardsFor = append(forwardsFor, ndc.Name)
+			accessible = append(accessible, ndc.Name)
 		}
 	}
-	if len(forwardsFor) != 0 {
-		zap.S().Debugf("I can forward for %d devices.", len(forwardsFor))
+	if len(accessible) != 0 {
+		nc.Devices[ndcI].Accessible = accessible
+		zap.S().Debugf("I can forward for %d devices.", len(accessible))
 		err := c.patchSpec(coord.PatchReifySpecRequest{
-			Accessible:    forwardsFor,
+			Accessible:    accessible,
 			AccessibleSet: true,
 		})
 		if err != nil {
