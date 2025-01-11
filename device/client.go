@@ -105,6 +105,11 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 		return false, err
 	}
 
+	err = c.patchForwardsFor(&nc)
+	if err != nil {
+		return false, err
+	}
+
 	ndcI, ok := nc.GetDeviceIndex(c.device)
 	if !ok {
 		panic("unreachable")
@@ -152,6 +157,38 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 	}
 	zap.S().Debug("posted status.")
 	return latest, nil
+}
+
+func (c *Client) getSpec() (spec.NetworkCensored, error) {
+	path := c.baseURL.JoinPath(fmt.Sprintf("/v1/reify/%s/%s/spec", c.network, c.device)).String()
+	zap.S().Debugf("path: %s", path)
+	req, err := http.NewRequest("GET", path, nil)
+	if err != nil {
+		panic(err)
+	}
+	c.addAuthorizationHeader(req)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return spec.NetworkCensored{}, fmt.Errorf("get spec: %w", err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return spec.NetworkCensored{}, fmt.Errorf("get spec: %w", err)
+	}
+	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+		return spec.NetworkCensored{}, fmt.Errorf("get spec: %s: %s", resp.Status, data)
+	}
+	var nc spec.NetworkCensored
+	err = json.Unmarshal(data, &nc)
+	if err != nil {
+		zap.S().Debugf("received body:\n%s", data)
+		return spec.NetworkCensored{}, fmt.Errorf("get spec: %w", err)
+	}
+	data, _ = json.Marshal(nc)
+	zap.S().Debugf("received spec:\n%s", data)
+	zap.S().Debugf("c.device = %s", c.device)
+	return nc, nil
 }
 
 func (c *Client) updateMyKeys(nc *spec.NetworkCensored) error {
@@ -237,36 +274,24 @@ func (c *Client) chooseEndpoints(nc *spec.NetworkCensored) error {
 	return nil
 }
 
-func (c *Client) getSpec() (spec.NetworkCensored, error) {
-	path := c.baseURL.JoinPath(fmt.Sprintf("/v1/reify/%s/%s/spec", c.network, c.device)).String()
-	zap.S().Debugf("path: %s", path)
-	req, err := http.NewRequest("GET", path, nil)
-	if err != nil {
-		panic(err)
+func (c *Client) patchForwardsFor(nc *spec.NetworkCensored) error {
+	var forwardsFor []string
+	for _, ndc := range nc.Devices {
+		if ndc.ForwarderAndEndpointChosen {
+			forwardsFor = append(forwardsFor, ndc.Name)
+		}
 	}
-	c.addAuthorizationHeader(req)
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return spec.NetworkCensored{}, fmt.Errorf("get spec: %w", err)
+	if len(forwardsFor) == 0 {
+		zap.S().Debugf("I can forward for %d devices.", len(forwardsFor))
+		err := c.patchSpec(coord.PatchReifySpecRequest{
+			ForwardsFor:    forwardsFor,
+			ForwardsForSet: true,
+		})
+		if err != nil {
+			return fmt.Errorf("patch spec: %w", err)
+		}
 	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return spec.NetworkCensored{}, fmt.Errorf("get spec: %w", err)
-	}
-	if resp.StatusCode != 200 && resp.StatusCode != 204 {
-		return spec.NetworkCensored{}, fmt.Errorf("get spec: %s: %s", resp.Status, data)
-	}
-	var nc spec.NetworkCensored
-	err = json.Unmarshal(data, &nc)
-	if err != nil {
-		zap.S().Debugf("received body:\n%s", data)
-		return spec.NetworkCensored{}, fmt.Errorf("get spec: %w", err)
-	}
-	data, _ = json.Marshal(nc)
-	zap.S().Debugf("received spec:\n%s", data)
-	zap.S().Debugf("c.device = %s", c.device)
-	return nc, nil
+	return nil
 }
 
 func (c *Client) patchSpec(body coord.PatchReifySpecRequest) error {
