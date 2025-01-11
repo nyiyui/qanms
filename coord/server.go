@@ -263,12 +263,17 @@ func (s *Server) postReifyStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to read request body", 500)
 		return
 	}
+	zap.S().Infof("postReifyStatus request data: %s", data)
 	var req PostReifyStatusRequest
 	err = json.Unmarshal(data, &req)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("json decode failed: %s", err), 400)
 	}
-	nI, _ := s.spec.GetNetworkIndex(network)
+	nI, ok := s.spec.GetNetworkIndex(network)
+	if !ok {
+		http.Error(w, "invalid request data", 422)
+		return
+	}
 	if !req.Reified.Equal(s.spec.Networks[nI].CensorForDevice(device)) {
 		zap.S().Infof("given network does not match mine (mine minus given):\n%s", cmp.Diff(req.Reified, s.spec.Networks[nI].CensorForDevice(device)))
 		data, _ := json.Marshal(req.Reified)
