@@ -63,7 +63,7 @@ func ApplyMachineDiff(a, b Machine, md MachineDiff, client *wgctrl.Client, handl
 		}
 		err := os.WriteFile("/proc/sys/net/ipv4/ip_forward", data, 0444)
 		if err != nil {
-			return fmt.Errorf("writing /proc/sys/net/ipv4/ip_forward: %w", err)
+			zap.S().Errorf("writing /proc/sys/net/ipv4/ip_forward: %s", err)
 		}
 	}
 	if md.ForwardsIPv6Changed {
