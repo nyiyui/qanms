@@ -209,14 +209,14 @@ func (s *Server) patchReifySpec(w http.ResponseWriter, r *http.Request) {
 		newSpec.Networks[nI].Devices[sndI].PersistentKeepalive = req.PersistentKeepalive
 	}
 	if req.AccessibleSet {
-		// TODO: check req.ForwardsFor validity
 		for _, name := range req.Accessible {
 			if _, ok := newSpec.Networks[nI].GetDevice(name); !ok {
 				http.Error(w, fmt.Sprintf("ForwardsFor contains nonexistent device name: %s/%s", network, name), 400)
 				return
 			}
 		}
-		newSpec.Networks[nI].Devices[sndI].ForwardsFor = req.Accessible
+		zap.S().Debugf("setting Accessible to %v", req.Accessible)
+		newSpec.Networks[nI].Devices[sndI].Accessible = req.Accessible
 	}
 	s.latestLock.Lock()
 	defer s.latestLock.Unlock()

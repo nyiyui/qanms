@@ -16,7 +16,7 @@ func (sc SpecCensored) CompileMachine(name string, ignoreIncomplete bool) (goal.
 			continue
 		}
 		snd := sn.Devices[sndI]
-		for _, name := range snd.ForwardsFor {
+		for _, name := range snd.Accessible {
 			forwardee, ok := sn.GetDevice(name)
 			if !ok {
 				panic("malformed spec")

@@ -113,7 +113,7 @@ func (nc NetworkCensored) GetDeviceIndex(name string) (i int, ok bool) {
 func (nc NetworkCensored) GetForwardersFor(name string) []string {
 	forwarders := make([]string, 0)
 	for _, ndc := range nc.Devices {
-		if slices.Contains(ndc.ForwardsFor, name) && ndc.ForwarderAndEndpointChosen {
+		if slices.Contains(ndc.Accessible, name) && ndc.ForwarderAndEndpointChosen {
 			forwarders = append(forwarders, ndc.Name)
 		}
 	}
@@ -196,10 +196,10 @@ type NetworkDeviceCensored struct {
 	// Set to 0 to disable persistent keepalive.
 	// This can be set by this peer.
 	PersistentKeepalive goal.Duration
-	// ForwardsFor is the list of devices (in the same network) that this peer has access to, and can fowrard packets to.
+	// Accessible is the list of devices (in the same network) that this peer has access to, and can fowrard packets to.
 	// Note that IPv6 forwarding is not supported yet.
 	// This can be set by this peer.
-	ForwardsFor []string
+	Accessible []string
 }
 
 type networkDeviceCensoredJSON struct {
@@ -245,7 +245,7 @@ func ipNetEqual(a, b goal.IPNet) bool {
 }
 
 func (a NetworkDeviceCensored) Equal(b NetworkDeviceCensored) bool {
-	return a.Name == b.Name && slices.Equal(a.Endpoints, b.Endpoints) && slices.EqualFunc(a.Addresses, b.Addresses, ipNetEqual) && a.ListenPort == b.ListenPort && a.PublicKey == b.PublicKey && (a.PresharedKey != nil && b.PresharedKey != nil && *a.PresharedKey == *b.PresharedKey || a.PresharedKey == nil && b.PresharedKey == nil) && a.PersistentKeepalive == b.PersistentKeepalive && slices.Equal(a.ForwardsFor, b.ForwardsFor)
+	return a.Name == b.Name && slices.Equal(a.Endpoints, b.Endpoints) && slices.EqualFunc(a.Addresses, b.Addresses, ipNetEqual) && a.ListenPort == b.ListenPort && a.PublicKey == b.PublicKey && (a.PresharedKey != nil && b.PresharedKey != nil && *a.PresharedKey == *b.PresharedKey || a.PresharedKey == nil && b.PresharedKey == nil) && a.PersistentKeepalive == b.PersistentKeepalive && slices.Equal(a.Accessible, b.Accessible)
 }
 
 func (ndc NetworkDeviceCensored) Clone() NetworkDeviceCensored {
