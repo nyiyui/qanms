@@ -242,7 +242,6 @@ func (c *Client) chooseEndpoints(nc *spec.NetworkCensored) error {
 		if !ndc.ForwarderAndEndpointChosen {
 			zap.S().Debugf("%s/%s: choosing endpoint…", c.network, ndc.Name)
 			err := (&nc.Devices[i]).ChooseEndpoint(spec.PingCommandScorer)
-			//err = (&nc.Devices[i]).ChooseEndpoint(func(string) (int, error) { return 0, nil })
 			if errors.Is(err, spec.ErrAllEndpointsBad) {
 				needsForwarders = append(needsForwarders, i)
 				zap.S().Debugf("%s/%s: needs forwarder.", c.network, ndc.Name)

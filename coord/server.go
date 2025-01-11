@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/nyiyui/qrystal/goal"
 	"github.com/nyiyui/qrystal/spec"
 	"github.com/nyiyui/qrystal/util"
@@ -269,9 +270,7 @@ func (s *Server) postReifyStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	nI, _ := s.spec.GetNetworkIndex(network)
 	if !req.Reified.Equal(s.spec.Networks[nI].CensorForDevice(device)) {
-		given, _ := json.Marshal(req.Reified)
-		mine, _ := json.Marshal(s.spec.Networks[nI].CensorForDevice(device))
-		zap.S().Infof("given network does not match mine:\ngiven:\n%s\nmine:\n%s", given, mine)
+		zap.S().Infof("given network does not match mine (mine minus given):\n%s", cmp.Diff(req.Reified, s.spec.Networks[nI].CensorForDevice(device)))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(200)
 		err := json.NewEncoder(w).Encode(PostReifyStatusResponse{false})
