@@ -203,8 +203,8 @@ func createGoroutines(m *MachineData, dnsClient dns.Client, config Config) {
 	for clientName, cc := range config.Clients {
 		go func(clientName string, cc ClientConfig) {
 			c, err := device.NewClient(&http.Client{
-				Timeout:   5 * time.Second,
-				Transport: cc.transport,
+				Timeout: 5 * time.Second,
+				//Transport: cc.transport, // TODO: nil pointer
 			}, cc.BaseURL, cc.Token, cc.Network, cc.Device, cc.PrivateKey)
 			if err != nil {
 				panic(err)
