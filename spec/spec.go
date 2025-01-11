@@ -196,7 +196,6 @@ type NetworkDeviceCensored struct {
 	// Set to 0 to disable persistent keepalive.
 	// This can be set by this peer.
 	PersistentKeepalive goal.Duration
-	// TODO: forwarding (keep this commented out for now)
 	// ForwardsFor is the list of devices (in the same network) that this peer has access to, and can fowrard packets to.
 	// Note that IPv6 forwarding is not supported yet.
 	// This can be set by this peer.

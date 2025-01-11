@@ -90,119 +90,39 @@ func (c *Client) addAuthorizationHeader(r *http.Request) {
 }
 
 func (c *Client) ReifySpec() (latest bool, err error) {
-	path := c.baseURL.JoinPath(fmt.Sprintf("/v1/reify/%s/%s/spec", c.network, c.device)).String()
-	zap.S().Debugf("path: %s", path)
-	req, err := http.NewRequest("GET", path, nil)
-	if err != nil {
-		panic(err)
-	}
-	c.addAuthorizationHeader(req)
-	resp, err := c.client.Do(req)
+	nc, err := c.getSpec()
 	if err != nil {
 		return false, fmt.Errorf("get spec: %w", err)
 	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
+
+	err = c.updateMyKeys(&nc)
 	if err != nil {
-		return false, fmt.Errorf("get spec: %w", err)
+		return false, err
 	}
-	if resp.StatusCode != 200 && resp.StatusCode != 204 {
-		return false, fmt.Errorf("get spec: %s: %s", resp.Status, data)
-	}
-	var nc spec.NetworkCensored
-	err = json.Unmarshal(data, &nc)
+
+	err = c.chooseEndpoints(&nc)
 	if err != nil {
-		zap.S().Debugf("received body:\n%s", data)
-		return false, fmt.Errorf("get spec: %w", err)
+		return false, err
 	}
-	data, _ = json.Marshal(nc)
-	zap.S().Debugf("received spec:\n%s", data)
-	zap.S().Debugf("c.device = %s", c.device)
 
 	ndcI, ok := nc.GetDeviceIndex(c.device)
 	if !ok {
 		panic("unreachable")
 	}
 	zap.S().Debugf("ndcI = %s", ndcI)
+
 	ndc := &nc.Devices[ndcI]
-	// === generate private keys ===
-	if c.privateKey == (goal.Key{}) {
-		zap.S().Debug("generating private keys…")
-		privateKey, err := wgtypes.GeneratePrivateKey()
-		if err != nil {
-			panic(fmt.Sprintf("generate private key: %s", err))
-		}
-		c.privateKey = goal.Key(privateKey)
-		zap.S().Debugf("generated key pair:\nprivate key: %s\npublic key: %s", privateKey, privateKey.PublicKey())
-	}
-	// === update spec's public keys ===
-	zap.S().Debugf("my public key is %s.", wgtypes.Key(ndc.PublicKey))
-	if wgtypes.Key(ndc.PublicKey) != wgtypes.Key(c.privateKey).PublicKey() {
-		zap.S().Debug("public key set in spec mismatch, patching spec…")
-		err = c.patchSpec(coord.PatchReifySpecRequest{
-			PublicKey:    goal.Key(wgtypes.Key(c.privateKey).PublicKey()),
-			PublicKeySet: true,
-		})
-		if err != nil {
-			return false, fmt.Errorf("patch spec: %w", err)
-		}
-		ndc.PublicKey = goal.Key(wgtypes.Key(c.privateKey).PublicKey())
-		zap.S().Debug("patched spec public key.")
-	}
-
-	// === choose endpoints ===
-	needsForwarders := make([]int, 0)
-	for i, ndc := range nc.Devices {
-		zap.S().Debugf("i=%d ndcI=%d ndc.Name=%s", i, ndcI, ndc.Name)
-		if i == ndcI {
-			continue
-		}
-		if !ndc.ForwarderAndEndpointChosen {
-			zap.S().Debugf("%s/%s: choosing endpoint…", c.network, ndc.Name)
-			err = (&nc.Devices[i]).ChooseEndpoint(spec.PingCommandScorer)
-			//err = (&nc.Devices[i]).ChooseEndpoint(func(string) (int, error) { return 0, nil })
-			if errors.Is(err, spec.ErrAllEndpointsBad) {
-				needsForwarders = append(needsForwarders, i)
-				zap.S().Debugf("%s/%s: needs forwarder.", c.network, ndc.Name)
-				continue
-			} else if err != nil {
-				return false, fmt.Errorf("choose endpoint for %s/%s: %w", c.network, ndc.Name, err)
-			}
-			if !nc.Devices[i].ForwarderAndEndpointChosen {
-				panic("unreachable")
-			}
-			zap.S().Debugf("%s/%s: endpoint %s chosen.", c.network, ndc.Name, ndc.Endpoints[ndc.EndpointChosenIndex])
-		}
-	}
-	for _, i := range needsForwarders {
-		ndc := nc.Devices[i]
-		zap.S().Debugf("%s/%s: choosing forwarder…", c.network, ndc.Name)
-		forwarders := nc.GetForwardersFor(ndc.Name)
-		if len(forwarders) == 0 {
-			zap.S().Infof("%s/%s has no forwarder or reachable endpoint. I'll continue with no Endpoint, and hope they connect to me.", c.network, ndc.Name)
-			nc.Devices[i].ForwarderAndEndpointChosen = false
-			continue
-		}
-		j := rand.Intn(len(forwarders))
-		nc.Devices[i].ForwarderChosenIndex = j
-		nc.Devices[i].UsesForwarder = true
-		nc.Devices[i].ForwarderAndEndpointChosen = true
-		zap.S().Debugf("%s/%s: forwarder %s chosen.", c.network, ndc.Name, ndc.Endpoints[ndc.ForwarderChosenIndex])
-	}
-
-	data, _ = json.MarshalIndent(ndc, "", "  ")
+	data, _ := json.MarshalIndent(ndc, "", "  ")
 	zap.S().Debugf("ndc:\n%s", data)
 	data, _ = json.MarshalIndent(nc, "", "  ")
 	zap.S().Debugf("nc:\n%s", data)
 	c.spec = spec.SpecCensored{Networks: []spec.NetworkCensored{nc}}
 
-	// === update DNS ===
 	err = c.updateDNS()
 	if err != nil {
 		return false, fmt.Errorf("update DNS server: %w", err)
 	}
 
-	// === apply spec ===
 	zap.S().Debug("compiling spec…")
 	gm, err := c.spec.CompileMachine(c.device, true)
 	if err != nil {
@@ -226,32 +146,127 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 
 	// === post status ===
 	zap.S().Debug("posting status…")
-	data, err = json.Marshal(coord.PostReifyStatusRequest{
-		Reified: nc,
-	})
-	if err != nil {
-		panic(fmt.Sprintf("json marshal: %s", err))
-	}
-	req, err = http.NewRequest("POST", c.baseURL.JoinPath(fmt.Sprintf("/v1/reify/%s/%s/status", c.network, c.device)).String(), bytes.NewBuffer(data))
-	if err != nil {
-		panic(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	c.addAuthorizationHeader(req)
-	resp, err = c.client.Do(req)
+	latest, err = c.postReifyStatus(nc)
 	if err != nil {
 		return false, fmt.Errorf("post status: %w", err)
 	}
-	data, _ = io.ReadAll(resp.Body)
-	if resp.StatusCode != 200 && resp.StatusCode != 204 {
-		return false, fmt.Errorf("post status: %s: %s", resp.Status, data)
+	zap.S().Debug("posted status.")
+	return latest, nil
+}
+
+func (c *Client) updateMyKeys(nc *spec.NetworkCensored) error {
+	ndcI, ok := nc.GetDeviceIndex(c.device)
+	if !ok {
+		panic("unreachable")
 	}
-	var respData coord.PostReifyStatusResponse
-	err = json.Unmarshal(data, &respData)
+	zap.S().Debugf("ndcI = %s", ndcI)
+	ndc := &nc.Devices[ndcI]
+	// === generate private keys ===
+	if c.privateKey == (goal.Key{}) {
+		zap.S().Debug("generating private keys…")
+		privateKey, err := wgtypes.GeneratePrivateKey()
+		if err != nil {
+			panic(fmt.Sprintf("generate private key: %s", err))
+		}
+		c.privateKey = goal.Key(privateKey)
+		zap.S().Debugf("generated key pair:\nprivate key: %s\npublic key: %s", privateKey, privateKey.PublicKey())
+	}
+	// === update spec's public keys ===
+	zap.S().Debugf("my public key is %s.", wgtypes.Key(ndc.PublicKey))
+	if wgtypes.Key(ndc.PublicKey) != wgtypes.Key(c.privateKey).PublicKey() {
+		zap.S().Debug("public key set in spec mismatch, patching spec…")
+		err := c.patchSpec(coord.PatchReifySpecRequest{
+			PublicKey:    goal.Key(wgtypes.Key(c.privateKey).PublicKey()),
+			PublicKeySet: true,
+		})
+		if err != nil {
+			return fmt.Errorf("patch spec: %w", err)
+		}
+		ndc.PublicKey = goal.Key(wgtypes.Key(c.privateKey).PublicKey())
+		zap.S().Debug("patched spec public key.")
+	}
+	return nil
+}
+
+func (c *Client) chooseEndpoints(nc *spec.NetworkCensored) error {
+	ndcI, ok := nc.GetDeviceIndex(c.device)
+	if !ok {
+		panic("unreachable")
+	}
+	zap.S().Debugf("ndcI = %s", ndcI)
+
+	// === choose endpoints ===
+	needsForwarders := make([]int, 0)
+	for i, ndc := range nc.Devices {
+		zap.S().Debugf("i=%d ndcI=%d ndc.Name=%s", i, ndcI, ndc.Name)
+		if i == ndcI {
+			continue
+		}
+		if !ndc.ForwarderAndEndpointChosen {
+			zap.S().Debugf("%s/%s: choosing endpoint…", c.network, ndc.Name)
+			err := (&nc.Devices[i]).ChooseEndpoint(spec.PingCommandScorer)
+			//err = (&nc.Devices[i]).ChooseEndpoint(func(string) (int, error) { return 0, nil })
+			if errors.Is(err, spec.ErrAllEndpointsBad) {
+				needsForwarders = append(needsForwarders, i)
+				zap.S().Debugf("%s/%s: needs forwarder.", c.network, ndc.Name)
+				continue
+			} else if err != nil {
+				return fmt.Errorf("choose endpoint for %s/%s: %w", c.network, ndc.Name, err)
+			}
+			if !nc.Devices[i].ForwarderAndEndpointChosen {
+				panic("unreachable")
+			}
+			zap.S().Debugf("%s/%s: endpoint %s chosen.", c.network, ndc.Name, ndc.Endpoints[ndc.EndpointChosenIndex])
+		}
+	}
+	for _, i := range needsForwarders {
+		ndc := nc.Devices[i]
+		zap.S().Debugf("%s/%s: choosing forwarder…", c.network, ndc.Name)
+		forwarders := nc.GetForwardersFor(ndc.Name)
+		if len(forwarders) == 0 {
+			zap.S().Infof("%s/%s has no forwarder or reachable endpoint. I'll continue with no Endpoint, and hope they connect to me.", c.network, ndc.Name)
+			nc.Devices[i].ForwarderAndEndpointChosen = false
+			continue
+		}
+		j := rand.Intn(len(forwarders))
+		nc.Devices[i].ForwarderChosenIndex = j
+		nc.Devices[i].UsesForwarder = true
+		nc.Devices[i].ForwarderAndEndpointChosen = true
+		zap.S().Debugf("%s/%s: forwarder %s chosen.", c.network, ndc.Name, ndc.Endpoints[ndc.ForwarderChosenIndex])
+	}
+	return nil
+}
+
+func (c *Client) getSpec() (spec.NetworkCensored, error) {
+	path := c.baseURL.JoinPath(fmt.Sprintf("/v1/reify/%s/%s/spec", c.network, c.device)).String()
+	zap.S().Debugf("path: %s", path)
+	req, err := http.NewRequest("GET", path, nil)
 	if err != nil {
-		return false, fmt.Errorf("json decode: %w", err)
+		panic(err)
 	}
-	return respData.Latest, nil
+	c.addAuthorizationHeader(req)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return spec.NetworkCensored{}, fmt.Errorf("get spec: %w", err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return spec.NetworkCensored{}, fmt.Errorf("get spec: %w", err)
+	}
+	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+		return spec.NetworkCensored{}, fmt.Errorf("get spec: %s: %s", resp.Status, data)
+	}
+	var nc spec.NetworkCensored
+	err = json.Unmarshal(data, &nc)
+	if err != nil {
+		zap.S().Debugf("received body:\n%s", data)
+		return spec.NetworkCensored{}, fmt.Errorf("get spec: %w", err)
+	}
+	data, _ = json.Marshal(nc)
+	zap.S().Debugf("received spec:\n%s", data)
+	zap.S().Debugf("c.device = %s", c.device)
+	return nc, nil
 }
 
 func (c *Client) patchSpec(body coord.PatchReifySpecRequest) error {
@@ -275,4 +290,33 @@ func (c *Client) patchSpec(body coord.PatchReifySpecRequest) error {
 		return fmt.Errorf("%s: %s", resp.Status, data)
 	}
 	return nil
+}
+
+func (c *Client) postReifyStatus(nc spec.NetworkCensored) (latest bool, err error) {
+	data, err := json.Marshal(coord.PostReifyStatusRequest{
+		Reified: nc,
+	})
+	if err != nil {
+		panic(fmt.Sprintf("json marshal: %s", err))
+	}
+	req, err := http.NewRequest("POST", c.baseURL.JoinPath(fmt.Sprintf("/v1/reify/%s/%s/status", c.network, c.device)).String(), bytes.NewBuffer(data))
+	if err != nil {
+		panic(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.addAuthorizationHeader(req)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("post status: %w", err)
+	}
+	data, _ = io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+		return false, fmt.Errorf("post status: %s: %s", resp.Status, data)
+	}
+	var respData coord.PostReifyStatusResponse
+	err = json.Unmarshal(data, &respData)
+	if err != nil {
+		return false, fmt.Errorf("json decode: %w", err)
+	}
+	return respData.Latest, nil
 }
