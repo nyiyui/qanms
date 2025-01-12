@@ -258,16 +258,10 @@ func (s *Server) postReifyStatus(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	data, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "failed to read request body", 500)
-		return
-	}
-	zap.S().Infof("postReifyStatus request data: %s", data)
 	var req PostReifyStatusRequest
-	err = json.Unmarshal(data, &req)
+	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("json decode failed: %s", err), 400)
+		http.Error(w, fmt.Sprintf("request data read or json decode failed: %s", err), 400)
 	}
 	nI, ok := s.spec.GetNetworkIndex(network)
 	if !ok {

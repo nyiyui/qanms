@@ -340,7 +340,6 @@ func (c *Client) postReifyStatus(nc spec.NetworkCensored) (latest bool, err erro
 	if err != nil {
 		panic(fmt.Sprintf("json marshal: %s", err))
 	}
-	zap.S().Debugf("request data:\n%s", data)
 	req, err := http.NewRequest("POST", c.baseURL.JoinPath(fmt.Sprintf("/v1/reify/%s/%s/status", c.network, c.device)).String(), bytes.NewBuffer(data))
 	if err != nil {
 		panic(err)
