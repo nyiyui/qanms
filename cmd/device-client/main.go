@@ -26,6 +26,7 @@ import (
 type Config struct {
 	Clients    map[string]ClientConfig
 	CanForward bool
+	AssumeProc bool
 }
 
 type ClientConfig struct {
@@ -210,6 +211,7 @@ func createGoroutines(m *MachineData, dnsClient dns.Client, config Config) {
 				panic(err)
 			}
 			c.SetCanForward(config.CanForward)
+			c.SetAssumeProc(config.AssumeProc)
 			c.Machine = m.Machines[clientName]
 			c.SetDNSClient(dnsClient)
 			continuous := new(device.ContinousClient)

@@ -25,7 +25,7 @@ func NewHandle() (*Handle, error) {
 	return h, err
 }
 
-func ApplyMachineDiff(a, b Machine, md MachineDiff, client *wgctrl.Client, handle *Handle) (err error) {
+func ApplyMachineDiff(a, b Machine, md MachineDiff, client *wgctrl.Client, handle *Handle, writeProc bool) (err error) {
 	for _, iface := range md.InterfacesRemoved {
 		zap.S().Debugf("removing interface %s.", iface.Name)
 		err = DeleteInterface(iface, client, handle)
@@ -56,7 +56,7 @@ func ApplyMachineDiff(a, b Machine, md MachineDiff, client *wgctrl.Client, handl
 			return
 		}
 	}
-	if md.ForwardsIPv4Changed {
+	if md.ForwardsIPv4Changed && writeProc {
 		data, err := os.ReadFile("/proc/sys/net/ipv4/ip_forward")
 		if err != nil {
 			return fmt.Errorf("reading /proc/sys/net/ipv4/ip_forward: %w", err)

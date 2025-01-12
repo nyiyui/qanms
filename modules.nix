@@ -193,6 +193,11 @@ args@{
                 default = true;
                 description = "Enables the device to forward packets between peers.";
               };
+              AssumeProc = mkOption {
+                type = bool;
+                default = true;
+                description = "Instead of writing to procfs to change options, assume they are already set and do not write to procfs.";
+              };
               dns = mkOption {
                 type = submodule {
                   options.enable = mkEnableOption "Qrystal on-device DNS server.";

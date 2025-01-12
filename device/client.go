@@ -31,6 +31,7 @@ type Client struct {
 	dns        dns.Client
 	dnsLock    sync.Mutex
 	canForward bool
+	assumeProc bool
 
 	spec       spec.SpecCensored
 	token      util.Token
@@ -69,6 +70,10 @@ func NewClient(httpClient *http.Client, baseURL string, token util.Token, networ
 
 func (c *Client) SetCanForward(canForward bool) {
 	c.canForward = canForward
+}
+
+func (c *Client) SetAssumeProc(assumeProc bool) {
+	c.assumeProc = assumeProc
 }
 
 func (c *Client) SetDNSClient(client dns.Client) {
@@ -148,7 +153,7 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 	data, _ = json.Marshal(diff)
 	zap.S().Debugf("diff:\n%s", data)
 	zap.S().Debug("applying machine…")
-	err = goal.ApplyMachineDiff(c.Machine, gm, diff, c.wgClient, c.goalHandle)
+	err = goal.ApplyMachineDiff(c.Machine, gm, diff, c.wgClient, c.goalHandle, !c.assumeProc)
 	if err != nil {
 		return false, fmt.Errorf("apply spec: %w", err)
 	}

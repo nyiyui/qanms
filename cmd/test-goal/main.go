@@ -62,7 +62,7 @@ func main() {
 		panic(err)
 	}
 
-	err = goal.ApplyMachineDiff(a, b, md, client, handle)
+	err = goal.ApplyMachineDiff(a, b, md, client, handle, true)
 	if err != nil {
 		panic(err)
 	}
