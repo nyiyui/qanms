@@ -111,8 +111,8 @@ func (nc NetworkCensored) GetDeviceIndex(name string) (i int, ok bool) {
 
 // GetForwardersFor returns a list of device indices that can forward for the given device, and has a chosen forwarder and endpoint.
 func (nc NetworkCensored) GetForwardersFor(name string) []int {
-	forwarders := make([]string, 0)
-	for _, ndc := range nc.Devices {
+	forwarders := make([]int, 0)
+	for i, ndc := range nc.Devices {
 		if slices.Contains(ndc.Accessible, name) && ndc.ForwarderAndEndpointChosen {
 			forwarders = append(forwarders, i)
 		}
