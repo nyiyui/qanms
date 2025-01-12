@@ -276,10 +276,10 @@ func (c *Client) chooseEndpoints(nc *spec.NetworkCensored) error {
 			continue
 		}
 		j := rand.Intn(len(forwarders))
-		nc.Devices[i].ForwarderChosenIndex = j
+		nc.Devices[i].ForwarderChosenIndex = forwarders[j]
 		nc.Devices[i].UsesForwarder = true
 		nc.Devices[i].ForwarderAndEndpointChosen = true
-		zap.S().Debugf("%s/%s: forwarder %s chosen.", c.network, ndc.Name, ndc.Endpoints[ndc.ForwarderChosenIndex])
+		zap.S().Debugf("%s/%s: forwarder %s chosen.", c.network, ndc.Name, nc.Devices[forwarders[j]].Name)
 	}
 	return nil
 }
