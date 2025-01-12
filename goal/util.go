@@ -1,9 +1,11 @@
 package goal
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
+	"sort"
 	"strings"
 
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -91,4 +93,27 @@ func StringConfig(cfg *wgtypes.Config) string {
 		fmt.Fprintf(b, "AllowedIPs = %v\n", peer.AllowedIPs)
 	}
 	return b.String()
+}
+
+// setDifference returns the elements in a that are not in b.
+// a and b will be sorted.
+// space complexity: O(n)
+func setDifference(a, b []IPNet) []IPNet {
+	less := func(x, y IPNet) bool {
+		ip := bytes.Compare(x.IP, y.IP)
+		mask := bytes.Compare(x.Mask, y.Mask)
+		return ip < 0 || (ip == 0 && mask < 0)
+	}
+	sort.Slice(a, func(i, j int) bool { return less(a[i], a[j]) })
+	sort.Slice(b, func(i, j int) bool { return less(b[i], b[j]) })
+	var diff []IPNet
+	for i, j := 0, 0; i < len(a); i++ {
+		for j < len(b) && less(b[j], a[i]) {
+			j++
+		}
+		if j == len(b) || less(a[i], b[j]) {
+			diff = append(diff, a[i])
+		}
+	}
+	return diff
 }

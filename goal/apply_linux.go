@@ -11,6 +11,7 @@ import (
 	"os"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/vishvananda/netlink"
 	"go.uber.org/zap"
@@ -224,7 +225,7 @@ func ApplyInterfaceDiff(a, b Interface, id InterfaceDiff, client *wgctrl.Client,
 		}
 		removedIndex = i
 	}
-	// CLEANUP: re-add each address added
+	// CLEANUP: re-add each address removed
 	defer func() {
 		if err == nil {
 			return
@@ -287,74 +288,112 @@ func ApplyInterfaceDiff(a, b Interface, id InterfaceDiff, client *wgctrl.Client,
 		return fmt.Errorf("link set up: %w", err)
 	}
 
-	zap.S().Debugf("remove %d routes to wg interface.", len(id.PeersRemoved))
-	// === remove routes to wg interface ===
-	for _, peer := range id.PeersRemoved {
-		for _, allowedIP := range peer.AllowedIPs {
-			zap.S().Debugf("removing route with dst %s from wg link", allowedIP)
-			err = handle.RouteDel(&netlink.Route{
-				LinkIndex: link.Attrs().Index,
-				Dst:       (*net.IPNet)(&allowedIP),
-				// TODO
-			})
-			if err != nil {
-				return fmt.Errorf("removing route with dst %s from wg link failed: %w", allowedIP, err)
-			}
-		}
+	err = applyInterfaceDiffRoutes(a, b, id, handle, link)
+	if err != nil {
+		return err
 	}
-	// CLEANUP: re-add each route removed
-	defer func() {
-		if err == nil {
-			return
-		}
-		for _, peer := range id.PeersRemoved {
-			for _, allowedIP := range peer.AllowedIPs {
-				err2 := handle.RouteAdd(&netlink.Route{
-					LinkIndex: link.Attrs().Index,
-					Dst:       (*net.IPNet)(&allowedIP),
-					// TODO
-				})
-				if err2 != nil {
-					zap.S().Infof("cleanup: undoing: removing route with dst %s from wg link failed: %s", allowedIP, err2)
-				}
-			}
-		}
-	}()
 
-	zap.S().Debugf("add %d routes to wg interface.", len(id.PeersAdded))
-	// === add routes to wg interface ===
-	for _, peer := range id.PeersAdded {
-		for _, allowedIP := range peer.AllowedIPs {
-			// ip route add <allowedIP> dev <wg interface>
-			zap.S().Debugf("adding route with dst %s from wg link %d", allowedIP, link.Attrs().Index)
-			err = handle.RouteAdd(&netlink.Route{
-				LinkIndex: link.Attrs().Index,
-				Dst:       (*net.IPNet)(&allowedIP),
-				// TODO
-			})
-			if err != nil {
-				return fmt.Errorf("adding route with dst %s from wg link failed: %w", allowedIP, err)
-			}
-		}
-	}
-	// CLEANUP: remove each route added
-	defer func() {
-		if err == nil {
-			return
-		}
-		for _, peer := range id.PeersAdded {
-			for _, allowedIP := range peer.AllowedIPs {
-				err2 := handle.RouteDel(&netlink.Route{
-					LinkIndex: link.Attrs().Index,
-					Dst:       (*net.IPNet)(&allowedIP),
-					// TODO
-				})
-				if err2 != nil {
-					zap.S().Infof("cleanup: undoing: adding route with dst %s from wg link failed: %s", allowedIP, err2)
-				}
-			}
-		}
-	}()
 	zap.S().Debug("applied interface diff.")
 	return nil
+}
+
+func applyInterfaceDiffRoutes(a, b Interface, id InterfaceDiff, handle *Handle, link netlink.Link) (err error) {
+	// Steps:
+	// - remove routes to wg interface
+	// - add routes to wg interface
+
+	tasks := []routeTask{}
+
+	for _, peer := range id.PeersRemoved {
+		for _, allowedIP := range peer.AllowedIPs {
+			tasks = append(tasks, routeTask{add: false, ip: allowedIP})
+		}
+	}
+	for _, peer := range id.PeersAdded {
+		for _, allowedIP := range peer.AllowedIPs {
+			tasks = append(tasks, routeTask{add: true, ip: allowedIP})
+		}
+	}
+	for _, pn := range id.PeersChanged {
+		oldI := slices.IndexFunc(a.Peers, func(peer InterfacePeer) bool { return peer.Name == pn })
+		newI := slices.IndexFunc(b.Peers, func(peer InterfacePeer) bool { return peer.Name == pn })
+		oldPeer := a.Peers[oldI]
+		newPeer := b.Peers[newI]
+		addedIPs := setDifference(newPeer.AllowedIPs, oldPeer.AllowedIPs)
+		for _, ip := range addedIPs {
+			tasks = append(tasks, routeTask{add: true, ip: ip})
+		}
+		removedIPs := setDifference(oldPeer.AllowedIPs, newPeer.AllowedIPs)
+		for _, ip := range removedIPs {
+			tasks = append(tasks, routeTask{add: false, ip: ip})
+		}
+	}
+
+	tasksStrings := make([]string, len(tasks))
+	for i, task := range tasks {
+		tasksStrings[i] = task.String()
+	}
+	zap.S().Debugf("changing %d routes to wg interface:\n%s", len(tasks), strings.Join(tasksStrings, "\n"))
+
+	var taskDone int
+	for i, task := range tasks {
+		if task.add {
+			err = handle.RouteAdd(&netlink.Route{
+				LinkIndex: link.Attrs().Index,
+				Dst:       (*net.IPNet)(&task.ip),
+			})
+			if err != nil {
+				return fmt.Errorf("adding route %s to wg interface failed: %w", task.ip, err)
+			}
+		} else {
+			err = handle.RouteDel(&netlink.Route{
+				LinkIndex: link.Attrs().Index,
+				Dst:       (*net.IPNet)(&task.ip),
+			})
+			if err != nil {
+				return fmt.Errorf("removing route %s from wg interface failed: %w", task.ip, err)
+			}
+		}
+		taskDone = i + 1
+	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		for i := 0; i < taskDone; i++ {
+			task := tasks[i]
+			if task.add {
+				zap.S().Debugf("cleanup: undoing: adding route %s to wg interface", task.ip)
+				err2 := handle.RouteDel(&netlink.Route{
+					LinkIndex: link.Attrs().Index,
+					Dst:       (*net.IPNet)(&task.ip),
+				})
+				if err2 != nil {
+					zap.S().Debugf("cleanup: undoing: adding route %s to wg interface failed: %s", task.ip, err2)
+				}
+			} else {
+				zap.S().Debugf("cleanup: undoing: removing route %s from wg interface", task.ip)
+				err2 := handle.RouteAdd(&netlink.Route{
+					LinkIndex: link.Attrs().Index,
+					Dst:       (*net.IPNet)(&task.ip),
+				})
+				if err2 != nil {
+					zap.S().Debugf("cleanup: undoing: removing route %s from wg interface failed: %s", task.ip, err2)
+				}
+			}
+		}
+	}()
+	return nil
+}
+
+type routeTask struct {
+	add bool
+	ip  IPNet
+}
+
+func (r routeTask) String() string {
+	if r.add {
+		return fmt.Sprintf("+ %s", r.ip)
+	}
+	return fmt.Sprintf("- %s", r.ip)
 }

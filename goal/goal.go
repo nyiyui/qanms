@@ -73,7 +73,9 @@ type Interface struct {
 	Addresses []IPNet
 
 	Peers []InterfacePeer
-	// TODO: forwarding
+
+	// Broken is true if the interface a) has an address that is not assigned with ip, b) has a peer with an AllowedIPs that is not assigned with ip.
+	Broken bool
 }
 
 type InterfaceDiff struct {
