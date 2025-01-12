@@ -211,6 +211,7 @@ type networkDeviceCensoredJSON struct {
 	PresharedKey        *goal.Key
 	PresharedKeyPath    string
 	PersistentKeepalive goal.Duration
+	Accessible          []string
 }
 
 func (ndc *NetworkDeviceCensored) UnmarshalJSON(data []byte) error {
@@ -237,6 +238,7 @@ func (ndc *NetworkDeviceCensored) UnmarshalJSON(data []byte) error {
 	ndc.PublicKey = ndcj.PublicKey
 	ndc.PresharedKey = ndcj.PresharedKey
 	ndc.PersistentKeepalive = ndcj.PersistentKeepalive
+	ndc.Accessible = ndcj.Accessible
 	return nil
 }
 
