@@ -259,7 +259,7 @@ func (s *Server) postReifyStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var req PostReifyStatusRequest
-	err = json.NewDecoder(r.Body).Decode(&req)
+	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("request data read or json decode failed: %s", err), 400)
 	}
