@@ -332,6 +332,7 @@ func (a *Applier) configureWireguard(iface Interface) error {
 			if err != nil {
 				return fmt.Errorf("resolving %s for peer %s: %w", peer.Endpoint, peer.Name, err)
 			}
+			zap.S().Debugf("resolved %s to %s for peer %s.", peer.Endpoint, endpoint, peer.Name)
 		}
 		peers[i] = wgtypes.PeerConfig{
 			PublicKey:    wgtypes.Key(peer.PublicKey),
