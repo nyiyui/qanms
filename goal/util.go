@@ -95,18 +95,19 @@ func StringConfig(cfg *wgtypes.Config) string {
 	return b.String()
 }
 
+func lessIPNet(x, y IPNet) bool {
+	ip := bytes.Compare(x.IP, y.IP)
+	mask := bytes.Compare(x.Mask, y.Mask)
+	return ip < 0 || (ip == 0 && mask < 0)
+}
+
 // setDifference returns the elements in a that are not in b.
 // a and b will be sorted.
 // space complexity: O(n)
-func setDifference(a, b []IPNet) []IPNet {
-	less := func(x, y IPNet) bool {
-		ip := bytes.Compare(x.IP, y.IP)
-		mask := bytes.Compare(x.Mask, y.Mask)
-		return ip < 0 || (ip == 0 && mask < 0)
-	}
+func setDifference[T any](a, b []T, less func(x, y T) bool) []T {
 	sort.Slice(a, func(i, j int) bool { return less(a[i], a[j]) })
 	sort.Slice(b, func(i, j int) bool { return less(b[i], b[j]) })
-	var diff []IPNet
+	var diff []T
 	for i, j := 0, 0; i < len(a); i++ {
 		for j < len(b) && less(b[j], a[i]) {
 			j++
@@ -116,4 +117,22 @@ func setDifference(a, b []IPNet) []IPNet {
 		}
 	}
 	return diff
+}
+
+func setIntersection[T any](a, b []T, less func(x, y T) bool) []T {
+	sort.Slice(a, func(i, j int) bool { return less(a[i], a[j]) })
+	sort.Slice(b, func(i, j int) bool { return less(b[i], b[j]) })
+	var intersection []T
+	for i, j := 0, 0; i < len(a) && j < len(b); {
+		if less(a[i], b[j]) {
+			i++
+		} else if less(b[j], a[i]) {
+			j++
+		} else {
+			intersection = append(intersection, a[i])
+			i++
+			j++
+		}
+	}
+	return intersection
 }

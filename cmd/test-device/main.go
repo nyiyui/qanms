@@ -12,8 +12,6 @@ import (
 )
 
 type Config struct {
-	MachineJSONPath string
-
 	BaseURL    string
 	Token      util.Token
 	Network    string
@@ -44,19 +42,6 @@ func main() {
 	}
 	zap.S().Info("created client.")
 
-	machineData, err := os.ReadFile(config.MachineJSONPath)
-	if err != nil {
-		panic(err)
-	}
-	err = json.Unmarshal(machineData, &c.Machine)
-	if err != nil {
-		panic(err)
-	}
-	data, err := json.MarshalIndent(c.Machine, "", "  ")
-	if err != nil {
-		panic(err)
-	}
-	zap.S().Infof("parsed machine data:\n%s", data)
 	latest, err := c.ReifySpec()
 	if err != nil {
 		panic(err)
@@ -65,13 +50,4 @@ func main() {
 		panic("posted but already not latest")
 	}
 	zap.S().Info("reified spec.")
-	machineData, err = json.Marshal(c.Machine)
-	if err != nil {
-		panic(err)
-	}
-	err = os.WriteFile(config.MachineJSONPath, machineData, 0600)
-	if err != nil {
-		panic(err)
-	}
-	zap.S().Infof("saved machine data:\n%s", machineData)
 }

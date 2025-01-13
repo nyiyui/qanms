@@ -37,7 +37,7 @@ func TestSetDifference(t *testing.T) {
 		for i, s := range tt.want {
 			want[i] = mustParseCIDR(s)
 		}
-		got := setDifference(a, b)
+		got := setDifference(a, b, lessIPNet)
 		if len(got) != len(want) {
 			t.Errorf("setDifference(%v, %v) = %v; want %v", a, b, got, want)
 			continue

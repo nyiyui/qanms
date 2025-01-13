@@ -4,15 +4,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
-	"errors"
 	"flag"
-	"fmt"
-	"io/fs"
 	"net/http"
 	"net/rpc"
 	"os"
-	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/nyiyui/qrystal/device"
@@ -40,40 +35,6 @@ type ClientConfig struct {
 	MinimumInterval goal.Duration
 	CertPath        string
 	transport       *http.Transport
-}
-
-type MachineData struct {
-	Machines     map[string]goal.Machine
-	machinesLock sync.RWMutex
-	path         string
-}
-
-func LoadMachineData(path string) (*MachineData, error) {
-	var m MachineData
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("reading failed: %w", err)
-	}
-	err = json.Unmarshal(data, &m)
-	if err != nil {
-		return nil, fmt.Errorf("parsing failed: %w", err)
-	}
-	m.path = path
-	return &m, nil
-}
-
-func (m *MachineData) setMachine(clientName string, gm goal.Machine) {
-	m.machinesLock.Lock()
-	defer m.machinesLock.Unlock()
-	m.Machines[clientName] = gm
-	data, err := json.Marshal(m)
-	if err != nil {
-		panic(err)
-	}
-	err = os.WriteFile(m.path, data, 0600)
-	if err != nil {
-		zap.S().Errorf("saving machine data failed: %s. Updating WireGuard interfaces may fail.", err)
-	}
 }
 
 func main() {
@@ -183,23 +144,10 @@ func main() {
 		dnsClient = dns.NewDirectClient(s)
 	}
 
-	path := filepath.Join(os.Getenv("STATE_DIRECTORY"), "MachineData.json")
-	m, err := LoadMachineData(path)
-	if err != nil {
-		zap.S().Debugf("IsNotExist=%t", os.IsNotExist(err))
-		if errors.Is(err, fs.ErrNotExist) {
-			zap.S().Info("no machine data found. Creating a blank one…")
-			m = new(MachineData)
-			m.Machines = map[string]goal.Machine{}
-			m.path = path
-		} else {
-			zap.S().Fatalf("loading machine data failed: %s", err)
-		}
-	}
-	createGoroutines(m, dnsClient, config)
+	createGoroutines(dnsClient, config)
 }
 
-func createGoroutines(m *MachineData, dnsClient dns.Client, config Config) {
+func createGoroutines(dnsClient dns.Client, config Config) {
 	util.Notify("READY=1\nSTATUS=starting…")
 	for clientName, cc := range config.Clients {
 		go func(clientName string, cc ClientConfig) {
@@ -212,7 +160,6 @@ func createGoroutines(m *MachineData, dnsClient dns.Client, config Config) {
 			}
 			c.SetCanForward(config.CanForward)
 			c.SetAssumeProc(config.AssumeProc)
-			c.Machine = m.Machines[clientName]
 			c.SetDNSClient(dnsClient)
 			continuous := new(device.ContinousClient)
 			continuous.Client = c
@@ -228,9 +175,6 @@ func createGoroutines(m *MachineData, dnsClient dns.Client, config Config) {
 					if err != nil {
 						zap.S().Errorf("%s: %s", clientName, err)
 						break
-					}
-					if updated {
-						m.setMachine(clientName, c.Machine)
 					}
 					if !latest {
 						if updated {

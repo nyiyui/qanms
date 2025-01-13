@@ -18,20 +18,16 @@ import (
 	"github.com/nyiyui/qrystal/spec"
 	"github.com/nyiyui/qrystal/util"
 	"go.uber.org/zap"
-	"golang.zx2c4.com/wireguard/wgctrl"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
 type Client struct {
 	client     *http.Client
 	baseURL    *url.URL
-	Machine    goal.Machine
-	wgClient   *wgctrl.Client
-	goalHandle *goal.Handle
+	applier    *goal.Applier
 	dns        dns.Client
 	dnsLock    sync.Mutex
 	canForward bool
-	assumeProc bool
 
 	spec       spec.SpecCensored
 	token      util.Token
@@ -45,11 +41,7 @@ func NewClient(httpClient *http.Client, baseURL string, token util.Token, networ
 	if err != nil {
 		return nil, err
 	}
-	wgClient, err := wgctrl.New()
-	if err != nil {
-		return nil, err
-	}
-	goalHandle, err := goal.NewHandle()
+	applier, err := goal.NewApplier(goal.ApplierOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -59,8 +51,7 @@ func NewClient(httpClient *http.Client, baseURL string, token util.Token, networ
 	return &Client{
 		client:     httpClient,
 		baseURL:    baseURL2,
-		wgClient:   wgClient,
-		goalHandle: goalHandle,
+		applier:    applier,
 		token:      token,
 		network:    network,
 		device:     device,
@@ -72,8 +63,13 @@ func (c *Client) SetCanForward(canForward bool) {
 	c.canForward = canForward
 }
 
-func (c *Client) SetAssumeProc(assumeProc bool) {
-	c.assumeProc = assumeProc
+func (c *Client) SetAssumeProc(assumeProc bool) error {
+	var err error
+	c.applier, err = goal.NewApplier(goal.ApplierOptions{Linux: goal.ApplierOptionsLinux{ReadWriteProc: !assumeProc}})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *Client) SetDNSClient(client dns.Client) {
@@ -147,17 +143,11 @@ func (c *Client) ReifySpec() (latest bool, err error) {
 	gm.Interfaces[0].PrivateKey = goal.Key(c.privateKey)
 	data, _ = json.Marshal(gm)
 	zap.S().Debugf("compiled spec:\n%s", data)
-	data, _ = json.Marshal(c.Machine)
-	zap.S().Debugf("machine spec:\n%s", data)
-	diff := goal.DiffMachine(&c.Machine, &gm)
-	data, _ = json.Marshal(diff)
-	zap.S().Debugf("diff:\n%s", data)
 	zap.S().Debug("applying machine…")
-	err = goal.ApplyMachineDiff(c.Machine, gm, diff, c.wgClient, c.goalHandle, !c.assumeProc)
+	err = c.applier.ApplyMachine(gm)
 	if err != nil {
 		return false, fmt.Errorf("apply spec: %w", err)
 	}
-	c.Machine = gm
 	zap.S().Debug("applied machine.")
 
 	// === post status ===
